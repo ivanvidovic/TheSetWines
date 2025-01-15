@@ -77,27 +77,10 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        function createVerticalGradientTexture(colors, width, height, inverted = false) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            const startY = inverted ? height : 0;
-            const endY = inverted ? 0 : height;
-            const gradient = ctx.createLinearGradient(0, startY, 0, endY); // Vertical gradient
-            colors.forEach((color, index) => {
-                gradient.addColorStop(index / (colors.length - 1), color);
-            });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
-            return new THREE.CanvasTexture(canvas);
-        }
-
-        // 3. Load Textures and Create Geometry
+        // 3. Load Textures and Create Geometry and Materials
         const textureLoader = new THREE.TextureLoader();
-
-        textureLoader.load('./frontA.png', function (frontATexture) {
-            const cardAspectRatio = frontATexture.image.width / frontATexture.image.height;
+        textureLoader.load('./front.png', function (frontTexture) {
+            const cardAspectRatio = frontTexture.image.width / frontTexture.image.height;
             let cardHeight = 3.5;
             let cardWidth = cardHeight * cardAspectRatio;
 
@@ -106,78 +89,66 @@
             cardWidth *= 0.8;
 
             const cardDepth = 0.05;
+
             const cardGeometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth);
 
             textureLoader.load('./back.png', function (backTexture) {
                 // Texture Filtering for sharpness
-                frontATexture.minFilter = THREE.LinearFilter;
-                frontATexture.magFilter = THREE.LinearFilter;
+                frontTexture.minFilter = THREE.LinearFilter;
+                frontTexture.magFilter = THREE.LinearFilter;
                 backTexture.minFilter = THREE.LinearFilter;
                 backTexture.magFilter = THREE.LinearFilter;
 
                 // --- Create Gradient Textures ---
                 const gradientColors = ['#6300ff', '#9505bc', '#e41d4b', '#fa7638', '#ffb921'];
-                const verticalGradientTexture = createVerticalGradientTexture(gradientColors, 10, 200);
-                const invertedVerticalGradientTexture = createVerticalGradientTexture([...gradientColors].reverse(), 10, 200);
+                const diagonalGradientTexture = createDiagonalGradientTexture(gradientColors, 200, 10);
                 const horizontalGradientTexture = createHorizontalGradientTexture(gradientColors, 200, 10);
                 const invertedHorizontalGradientTexture = createHorizontalGradientTexture([...gradientColors].reverse(), 200, 10);
+                const invertedDiagonalGradientTexture = createDiagonalGradientTexture(gradientColors, 200, 10, true);
 
-                verticalGradientTexture.needsUpdate = true;
-                invertedVerticalGradientTexture.needsUpdate = true;
+                diagonalGradientTexture.needsUpdate = true;
                 horizontalGradientTexture.needsUpdate = true;
                 invertedHorizontalGradientTexture.needsUpdate = true;
+                invertedDiagonalGradientTexture.needsUpdate = true;
 
-                // 5. Create Individual Materials for Each Card
-                const createCardMaterials = (frontMap, backMap) => [
-                    new THREE.MeshBasicMaterial({ map: invertedVerticalGradientTexture }), // Right
-                    new THREE.MeshBasicMaterial({ map: verticalGradientTexture }), // Left
+                // 5. Create Materials - Applying gradients with individual control
+                const materials = [
+                    new THREE.MeshBasicMaterial({ map: invertedDiagonalGradientTexture }), // Right - Inverted
+                    new THREE.MeshBasicMaterial({ map: diagonalGradientTexture }), // Left
                     new THREE.MeshBasicMaterial({ map: horizontalGradientTexture }), // Top
                     new THREE.MeshBasicMaterial({ map: invertedHorizontalGradientTexture }), // Bottom - Inverted
-                    new THREE.MeshBasicMaterial({ map: frontMap }),             // Front
-                    new THREE.MeshBasicMaterial({ map: backMap })              // Back
+                    new THREE.MeshBasicMaterial({ map: frontTexture }),             // Front
+                    new THREE.MeshBasicMaterial({ map: backTexture })              // Back
                 ];
 
-                // Create the top card (cardA) with its own materials
-                const cardAMaterials = createCardMaterials(frontATexture, backTexture);
-                cardA = new THREE.Mesh(cardGeometry, cardAMaterials);
-                cardA.position.y = cardHeight + 0.5; // Position above the middle card (adjust spacing)
-                scene.add(cardA);
+                // Rotate the gradient texture for right and left faces
+                materials[0].map.rotation = -Math.PI / 2;   // Right face (rotate -90 degrees)
+                materials[0].map.center.set(0.5, 0.5);     // Set rotation center
+                materials[1].map.rotation = -Math.PI / 2;  // Left face (rotate -90 degrees)
+                materials[1].map.center.set(0.5, 0.5);     // Set rotation center
 
-                // Create the middle card (cardB) with its own materials
-                const cardBMaterials = createCardMaterials(frontATexture, backTexture);
-                cardB = new THREE.Mesh(cardGeometry, cardBMaterials);
-                scene.add(cardB);
+                const card = new THREE.Mesh(cardGeometry, materials);
+                scene.add(card);
 
-                // Load the new front texture for cardB
-                textureLoader.load('./frontB.png', function (newFrontBTexture) {
-                    newFrontBTexture.minFilter = THREE.LinearFilter;
-                    newFrontBTexture.magFilter = THREE.LinearFilter;
-                    cardB.material[4].map = newFrontBTexture;
-                    cardB.material[4].map.needsUpdate = true;
-                });
+                // Create the second card
+                const card2 = new THREE.Mesh(cardGeometry, materials);
+                card2.position.y = cardHeight + 0.5; // Position above the first card (adjust spacing)
+                scene.add(card2);
 
-                // Create the bottom card (cardC) with its own materials
-                const cardCMaterials = createCardMaterials(frontATexture, backTexture);
-                cardC = new THREE.Mesh(cardGeometry, cardCMaterials);
-                cardC.position.y = -(cardHeight + 0.5); // Position below the middle card (adjust spacing)
-                scene.add(cardC);
-
-                // Load the new front texture for cardC
-                textureLoader.load('./frontC.png', function (newFrontCTexture) {
-                    newFrontCTexture.minFilter = THREE.LinearFilter;
-                    newFrontCTexture.magFilter = THREE.LinearFilter;
-                    cardC.material[4].map = newFrontCTexture;
-                    cardC.material[4].map.needsUpdate = true;
-                });
+                // Create the third card
+                const card3 = new THREE.Mesh(cardGeometry, materials);
+                card3.position.y = -(cardHeight + 0.5); // Position below the first card (adjust spacing)
+                scene.add(card3);
 
                 // 8. Animation Loop
-                let rotationSpeed = -0.01;
+                let rotationSpeed = -0.01; // Negative for opposite direction
                 rotationSpeed *= 0.7;   // Slow down by 30%
+
                 function animate() {
                     requestAnimationFrame(animate);
-                    cardB.rotation.y += rotationSpeed;
-                    cardA.rotation.y += rotationSpeed;
-                    cardC.rotation.y += rotationSpeed;
+                    card.rotation.y += rotationSpeed;
+                    card2.rotation.y += rotationSpeed;
+                    card3.rotation.y += rotationSpeed;
                     controls.update();
                     renderer.render(scene, camera);
                 }
