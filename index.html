@@ -10,7 +10,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #000000; /* Changed to black */
+            background-color: #d8d8d8; /* 10% darker than #f0f0f0 */
         }
         canvas {
             display: block;
@@ -31,9 +31,8 @@
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.getElementById('card-container').appendChild(renderer.domElement);
-        renderer.setClearColor(0x000000); // Changed to black
-        // renderer.shadowMap.enabled = true; // Enable shadow mapping
-        // renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Optional: smoother shadows
+        renderer.setClearColor(0xd8d8d8); // Ensure Three.js background matches
+        // renderer.setClearColor(0xf0f0f0); // Original color
 
         // 2. Add Orbit Controls
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -142,15 +141,11 @@
                 const cardAMaterials = createCardMaterials(frontATexture, backTexture);
                 cardA = new THREE.Mesh(cardGeometry, cardAMaterials);
                 cardA.position.y = cardHeight + 0.5; // Position above the middle card (adjust spacing)
-                // cardA.castShadow = true; // Enable shadow casting
-                // cardA.receiveShadow = true; // Enable shadow receiving
                 scene.add(cardA);
 
                 // Create the middle card (cardB) with its own materials
                 const cardBMaterials = createCardMaterials(frontATexture, backTexture);
                 cardB = new THREE.Mesh(cardGeometry, cardBMaterials);
-                // cardB.castShadow = true; // Enable shadow casting
-                // cardB.receiveShadow = true; // Enable shadow receiving
                 scene.add(cardB);
 
                 // Load the new front texture for cardB
@@ -165,8 +160,6 @@
                 const cardCMaterials = createCardMaterials(frontATexture, backTexture);
                 cardC = new THREE.Mesh(cardGeometry, cardCMaterials);
                 cardC.position.y = -(cardHeight + 0.5); // Position below the middle card (adjust spacing)
-                // cardC.castShadow = true; // Enable shadow casting
-                // cardC.receiveShadow = true; // Enable shadow receiving
                 scene.add(cardC);
 
                 // Load the new front texture for cardC
@@ -196,22 +189,12 @@
         camera.position.z = 8; // Moved the camera back
 
         // 7. Add Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // Reverted intensity
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5); // Reverted intensity
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
         directionalLight.position.set(1, 1, 2);
         scene.add(directionalLight);
-
-        // Add a spotlight above the cards for shadows
-        // const spotLight = new THREE.SpotLight(0xffffff, 0.8);
-        // spotLight.position.set(0, 5, 0); // Position above the cards
-        // spotLight.castShadow = true; // Enable shadow casting for this light
-        // spotLight.shadow.mapSize.width = 1024; // Increase shadow map size for better quality
-        // spotLight.shadow.mapSize.height = 1024;
-        // spotLight.shadow.camera.near = 0.1;
-        // spotLight.shadow.camera.far = 10;
-        // scene.add(spotLight);
 
         // 9. Handle Window Resizing
         window.addEventListener('resize', onWindowResize, false);
