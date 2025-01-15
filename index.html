@@ -19,15 +19,18 @@
             /* No specific width/height needed */
         }
     </style>
-</head>
-<body>
-    <div id="card-container"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Include shader files BEFORE SMAAPass -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/postprocessing/SMAAShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/postprocessing/EffectComposer.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/postprocessing/RenderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/postprocessing/ShaderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/postprocessing/SMAAPass.js"></script>
+</head>
+<body>
+    <div id="card-container"></div>
     <script>
         // 1. Set up the scene, camera, and renderer
         const scene = new THREE.Scene();
@@ -215,50 +218,6 @@
         const composer = new THREE.EffectComposer(renderer);
         composer.addPass(new THREE.RenderPass(scene, camera));
 
-        // Remove Fisheye Lens Effect
-        // const shaderFisheyeChromaticBlur = {
-        //     uniforms: {
-        //         tDiffuse: { value: null },
-        //         aberration: { value: 0.0 },
-        //         distortion: { value: 0.2 },  // Further reduced fisheye distortion
-        //         blurAmount: { value: 0.0 }
-        //     },
-        //     vertexShader: `
-        //         varying vec2 vUv;
-        //         void main() {
-        //             vUv = uv;
-        //             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        //         }
-        //     `,
-        //     fragmentShader: `
-        //         uniform sampler2D tDiffuse;
-        //         uniform float aberration;
-        //         uniform float distortion;
-        //         uniform float blurAmount;
-        //         varying vec2 vUv;
-
-        //         void main() {
-        //             vec2 uv = vUv - 0.5;
-        //             float radius = length(uv);
-
-        //             // Fisheye distortion
-        //             float angle = atan(radius, 1.0);
-        //             float newRadius = tan(angle * distortion);
-        //             vec2 distortedUv = normalize(uv) * newRadius * (1.0/distortion) + 0.5;
-
-        //             if (radius > 0.99) {
-        //                 gl_FragColor = texture2D(tDiffuse, vUv);
-        //                 return;
-        //             }
-
-        //             gl_FragColor = texture2D(tDiffuse, distortedUv);
-        //         }
-        //     `
-        // };
-
-        // const fisheyeChromaticBlurPass = new THREE.ShaderPass(shaderFisheyeChromaticBlur);
-        // composer.addPass(fisheyeChromaticBlurPass);
-
         // Add SMAA Anti-aliasing
         const smaaPass = new THREE.SMAAPass(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
         composer.addPass(smaaPass);
@@ -272,6 +231,14 @@
             composer.setSize(window.innerWidth, window.innerHeight);
             smaaPass.setSize(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
         }
+
+        // Render loop with postprocessing
+        function render() {
+            requestAnimationFrame(render);
+            controls.update();
+            composer.render();
+        }
+        render();
     </script>
 </body>
 </html>
