@@ -1,3 +1,4 @@
+--- START OF FILE index.html ---
 <!DOCTYPE html>
 <html>
 <head>
@@ -107,12 +108,12 @@
             const cardDepth = 0.05;
             const cardGeometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth);
 
-            textureLoader.load('./back.png', function (backTexture) {
+            textureLoader.load('./backA.png', function (backATexture) {
                 // Texture Filtering for sharpness
                 frontATexture.minFilter = THREE.LinearFilter;
                 frontATexture.magFilter = THREE.LinearFilter;
-                backTexture.minFilter = THREE.LinearFilter;
-                backTexture.magFilter = THREE.LinearFilter;
+                backATexture.minFilter = THREE.LinearFilter;
+                backATexture.magFilter = THREE.LinearFilter;
 
                 // --- Create Gradient Textures ---
                 const gradientColors = ['#6300ff', '#9505bc', '#e41d4b', '#fa7638', '#ffb921'];
@@ -137,13 +138,13 @@
                 ];
 
                 // Create the top card (cardA) with its own materials
-                const cardAMaterials = createCardMaterials(frontATexture, backTexture);
+                const cardAMaterials = createCardMaterials(frontATexture, backATexture);
                 cardA = new THREE.Mesh(cardGeometry, cardAMaterials);
                 cardA.position.y = cardHeight + 0.5; // Position above the middle card (adjust spacing)
                 scene.add(cardA);
 
                 // Create the middle card (cardB) with its own materials
-                const cardBMaterials = createCardMaterials(frontATexture, backTexture);
+                const cardBMaterials = createCardMaterials(frontATexture, backATexture);
                 cardB = new THREE.Mesh(cardGeometry, cardBMaterials);
                 scene.add(cardB);
 
@@ -156,7 +157,7 @@
                 });
 
                 // Create the bottom card (cardC) with its own materials
-                const cardCMaterials = createCardMaterials(frontATexture, backTexture);
+                const cardCMaterials = createCardMaterials(frontATexture, backATexture);
                 cardC = new THREE.Mesh(cardGeometry, cardCMaterials);
                 cardC.position.y = -(cardHeight + 0.5); // Position below the middle card (adjust spacing)
                 scene.add(cardC);
