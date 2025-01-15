@@ -1,4 +1,3 @@
---- START OF FILE index.html ---
 <!DOCTYPE html>
 <html>
 <head>
@@ -11,7 +10,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #000000;
+            background-color: #0c0c0c;
         }
         canvas {
             display: block;
@@ -32,7 +31,7 @@
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.getElementById('card-container').appendChild(renderer.domElement);
-        renderer.setClearColor(0x000000);
+        renderer.setClearColor(0x0c0c0c);
 
         // 2. Add Orbit Controls
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -143,7 +142,7 @@
                 cardA.position.y = cardHeight + 0.5; // Position above the middle card (adjust spacing)
                 scene.add(cardA);
 
-                // Create the middle card (cardB) with its own materials
+                // Create the middle card (cardB)
                 const cardBMaterials = createCardMaterials(frontATexture, backATexture);
                 cardB = new THREE.Mesh(cardGeometry, cardBMaterials);
                 scene.add(cardB);
@@ -156,7 +155,16 @@
                     cardB.material[4].map.needsUpdate = true;
                 });
 
-                // Create the bottom card (cardC) with its own materials
+                // Load the new back texture for cardB
+                textureLoader.load('./backB.png', function (backBTexture) {
+                    backBTexture.minFilter = THREE.LinearFilter;
+                    backBTexture.magFilter = THREE.LinearFilter;
+                    const backBMaterial = new THREE.MeshBasicMaterial({ map: backBTexture });
+                    cardB.material[5] = backBMaterial; // Update only the back face material for cardB
+                    cardB.material[5].needsUpdate = true;
+                });
+
+                // Create the bottom card (cardC)
                 const cardCMaterials = createCardMaterials(frontATexture, backATexture);
                 cardC = new THREE.Mesh(cardGeometry, cardCMaterials);
                 cardC.position.y = -(cardHeight + 0.5); // Position below the middle card (adjust spacing)
@@ -168,6 +176,15 @@
                     newFrontCTexture.magFilter = THREE.LinearFilter;
                     cardC.material[4].map = newFrontCTexture;
                     cardC.material[4].map.needsUpdate = true;
+                });
+
+                // Load the new back texture for cardC
+                textureLoader.load('./backC.png', function (backCTexture) {
+                    backCTexture.minFilter = THREE.LinearFilter;
+                    backCTexture.magFilter = THREE.LinearFilter;
+                    const backCMaterial = new THREE.MeshBasicMaterial({ map: backCTexture });
+                    cardC.material[5] = backCMaterial; // Update only the back face material for cardC
+                    cardC.material[5].needsUpdate = true;
                 });
 
                 // 8. Animation Loop
