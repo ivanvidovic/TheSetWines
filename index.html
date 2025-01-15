@@ -1,32 +1,225 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Simple Three.js Test</title>
-    <style>body { margin: 0; }</style>
+    <title>3D Business Card Preview</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000000; /* Changed to black */
+        }
+        canvas {
+            display: block;
+        }
+        #card-container {
+            /* No specific width/height needed */
+        }
+    </style>
 </head>
 <body>
+    <div id="card-container"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
     <script>
+        // 1. Set up the scene, camera, and renderer
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        document.getElementById('card-container').appendChild(renderer.domElement);
+        renderer.setClearColor(0x000000); // Changed to black
+        // renderer.shadowMap.enabled = true; // Enable shadow mapping
+        // renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Optional: smoother shadows
 
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
+        // 2. Add Orbit Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 1;
+        controls.maxDistance = 10;
 
-        camera.position.z = 5;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.01;
-            renderer.render(scene, camera);
+        // --- Gradient Functions ---
+        function createDiagonalGradientTexture(colors, width, height, inverted = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const startX = inverted ? width : 0;
+            const startY = inverted ? 0 : height;
+            const endX = inverted ? 0 : width;
+            const endY = inverted ? height : 0;
+            const gradient = ctx.createLinearGradient(startX, startY, endX, endY); // Diagonal gradient
+            colors.forEach((color, index) => {
+                gradient.addColorStop(index / (colors.length - 1), color);
+            });
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+            return new THREE.CanvasTexture(canvas);
         }
-        animate();
+
+        function createHorizontalGradientTexture(colors, width, height, inverted = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const startX = inverted ? width : 0;
+            const endX = inverted ? 0 : width;
+            const gradient = ctx.createLinearGradient(startX, 0, endX, 0); // Horizontal gradient
+            colors.forEach((color, index) => {
+                gradient.addColorStop(index / (colors.length - 1), color);
+            });
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createVerticalGradientTexture(colors, width, height, inverted = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const startY = inverted ? height : 0;
+            const endY = inverted ? 0 : height;
+            const gradient = ctx.createLinearGradient(0, startY, 0, endY); // Vertical gradient
+            colors.forEach((color, index) => {
+                gradient.addColorStop(index / (colors.length - 1), color);
+            });
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // 3. Load Textures and Create Geometry
+        const textureLoader = new THREE.TextureLoader();
+
+        textureLoader.load('./frontA.png', function (frontATexture) {
+            const cardAspectRatio = frontATexture.image.width / frontATexture.image.height;
+            let cardHeight = 3.5;
+            let cardWidth = cardHeight * cardAspectRatio;
+
+            // Make the card 20% smaller
+            cardHeight *= 0.8;
+            cardWidth *= 0.8;
+
+            const cardDepth = 0.05;
+            const cardGeometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth);
+
+            textureLoader.load('./back.png', function (backTexture) {
+                // Texture Filtering for sharpness
+                frontATexture.minFilter = THREE.LinearFilter;
+                frontATexture.magFilter = THREE.LinearFilter;
+                backTexture.minFilter = THREE.LinearFilter;
+                backTexture.magFilter = THREE.LinearFilter;
+
+                // --- Create Gradient Textures ---
+                const gradientColors = ['#6300ff', '#9505bc', '#e41d4b', '#fa7638', '#ffb921'];
+                const verticalGradientTexture = createVerticalGradientTexture(gradientColors, 10, 200);
+                const invertedVerticalGradientTexture = createVerticalGradientTexture([...gradientColors].reverse(), 10, 200);
+                const horizontalGradientTexture = createHorizontalGradientTexture(gradientColors, 200, 10);
+                const invertedHorizontalGradientTexture = createHorizontalGradientTexture([...gradientColors].reverse(), 200, 10);
+
+                verticalGradientTexture.needsUpdate = true;
+                invertedVerticalGradientTexture.needsUpdate = true;
+                horizontalGradientTexture.needsUpdate = true;
+                invertedHorizontalGradientTexture.needsUpdate = true;
+
+                // 5. Create Individual Materials for Each Card
+                const createCardMaterials = (frontMap, backMap) => [
+                    new THREE.MeshBasicMaterial({ map: invertedVerticalGradientTexture }), // Right
+                    new THREE.MeshBasicMaterial({ map: verticalGradientTexture }), // Left
+                    new THREE.MeshBasicMaterial({ map: horizontalGradientTexture }), // Top
+                    new THREE.MeshBasicMaterial({ map: invertedHorizontalGradientTexture }), // Bottom - Inverted
+                    new THREE.MeshBasicMaterial({ map: frontMap }),             // Front
+                    new THREE.MeshBasicMaterial({ map: backMap })              // Back
+                ];
+
+                // Create the top card (cardA) with its own materials
+                const cardAMaterials = createCardMaterials(frontATexture, backTexture);
+                cardA = new THREE.Mesh(cardGeometry, cardAMaterials);
+                cardA.position.y = cardHeight + 0.5; // Position above the middle card (adjust spacing)
+                // cardA.castShadow = true; // Enable shadow casting
+                // cardA.receiveShadow = true; // Enable shadow receiving
+                scene.add(cardA);
+
+                // Create the middle card (cardB) with its own materials
+                const cardBMaterials = createCardMaterials(frontATexture, backTexture);
+                cardB = new THREE.Mesh(cardGeometry, cardBMaterials);
+                // cardB.castShadow = true; // Enable shadow casting
+                // cardB.receiveShadow = true; // Enable shadow receiving
+                scene.add(cardB);
+
+                // Load the new front texture for cardB
+                textureLoader.load('./frontB.png', function (newFrontBTexture) {
+                    newFrontBTexture.minFilter = THREE.LinearFilter;
+                    newFrontBTexture.magFilter = THREE.LinearFilter;
+                    cardB.material[4].map = newFrontBTexture;
+                    cardB.material[4].map.needsUpdate = true;
+                });
+
+                // Create the bottom card (cardC) with its own materials
+                const cardCMaterials = createCardMaterials(frontATexture, backTexture);
+                cardC = new THREE.Mesh(cardGeometry, cardCMaterials);
+                cardC.position.y = -(cardHeight + 0.5); // Position below the middle card (adjust spacing)
+                // cardC.castShadow = true; // Enable shadow casting
+                // cardC.receiveShadow = true; // Enable shadow receiving
+                scene.add(cardC);
+
+                // Load the new front texture for cardC
+                textureLoader.load('./frontC.png', function (newFrontCTexture) {
+                    newFrontCTexture.minFilter = THREE.LinearFilter;
+                    newFrontCTexture.magFilter = THREE.LinearFilter;
+                    cardC.material[4].map = newFrontCTexture;
+                    cardC.material[4].map.needsUpdate = true;
+                });
+
+                // 8. Animation Loop
+                let rotationSpeed = -0.01;
+                rotationSpeed *= 0.7;   // Slow down by 30%
+                function animate() {
+                    requestAnimationFrame(animate);
+                    cardB.rotation.y += rotationSpeed;
+                    cardA.rotation.y += rotationSpeed;
+                    cardC.rotation.y += rotationSpeed;
+                    controls.update();
+                    renderer.render(scene, camera);
+                }
+                animate();
+            });
+        });
+
+        // 6. Position the Camera
+        camera.position.z = 8; // Moved the camera back
+
+        // 7. Add Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // Reverted intensity
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5); // Reverted intensity
+        directionalLight.position.set(1, 1, 2);
+        scene.add(directionalLight);
+
+        // Add a spotlight above the cards for shadows
+        // const spotLight = new THREE.SpotLight(0xffffff, 0.8);
+        // spotLight.position.set(0, 5, 0); // Position above the cards
+        // spotLight.castShadow = true; // Enable shadow casting for this light
+        // spotLight.shadow.mapSize.width = 1024; // Increase shadow map size for better quality
+        // spotLight.shadow.mapSize.height = 1024;
+        // spotLight.shadow.camera.near = 0.1;
+        // spotLight.shadow.camera.far = 10;
+        // scene.add(spotLight);
+
+        // 9. Handle Window Resizing
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
     </script>
 </body>
 </html>
