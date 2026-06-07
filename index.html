@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- v8: full-resolution texture quality build. Keeps GLB geometry untouched, swaps only exterior artwork texture atlas regions, and preserves uploaded texture resolution up to GPU limits. -->
+<!-- v9: mobile-friendly bottom dock controls. Keeps v8 full-quality texture rendering and untouched GLB geometry. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>Wine Case Wrap Preview · Mobile Optimized</title>
+  <title>Wine Case Wrap Preview · Mobile Controls</title>
   <meta name="description" content="Full-resolution GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
   <style>
     :root {
@@ -160,31 +160,43 @@
     .controls {
       position: fixed;
       left: 50%;
-      bottom: calc(18px + var(--safe-bottom));
+      bottom: calc(16px + var(--safe-bottom));
       z-index: 4;
       display: flex;
-      align-items: center;
+      align-items: stretch;
+      justify-content: center;
       gap: 6px;
-      padding: 8px;
-      border-radius: var(--radius);
+      padding: 7px;
+      border-radius: 24px;
       transform: translateX(-50%);
+      backdrop-filter: blur(18px) saturate(1.15);
+      -webkit-backdrop-filter: blur(18px) saturate(1.15);
     }
 
     button,
     .file-button {
       appearance: none;
-      min-height: 40px;
-      padding: 10px 14px;
+      height: 38px;
+      min-width: 56px;
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid transparent;
-      border-radius: var(--radius);
+      border-radius: 18px;
       background: transparent;
       color: var(--muted);
       font: inherit;
       font-size: 12px;
+      font-weight: 650;
+      line-height: 1;
+      letter-spacing: -0.01em;
       cursor: pointer;
-      transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      transition: color 140ms ease, background 140ms ease, border-color 140ms ease, transform 140ms ease;
       white-space: nowrap;
       user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
     }
 
     button:hover,
@@ -194,15 +206,23 @@
       transform: translateY(-1px);
     }
 
+    button:focus-visible,
+    .file-button:focus-within {
+      outline: 2px solid color-mix(in srgb, var(--accent) 48%, transparent);
+      outline-offset: 2px;
+    }
+
     button.active {
       color: var(--text);
-      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
     }
 
     .divider {
       width: 1px;
+      min-width: 1px;
       height: 22px;
+      align-self: center;
       margin: 0 2px;
       background: var(--line);
     }
@@ -317,36 +337,33 @@
       }
 
       .controls {
-        left: calc(10px + var(--safe-left));
-        right: calc(10px + var(--safe-right));
-        bottom: calc(10px + var(--safe-bottom));
+        left: calc(8px + var(--safe-left));
+        right: calc(8px + var(--safe-right));
+        bottom: calc(8px + var(--safe-bottom));
         width: auto;
         max-width: none;
         transform: none;
-        justify-content: flex-start;
-        gap: 5px;
-        padding: 7px;
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-        border-radius: 24px;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        align-items: stretch;
+        justify-content: stretch;
+        gap: 6px;
+        padding: 8px;
+        border-radius: 22px;
       }
-
-      .controls::-webkit-scrollbar { display: none; }
 
       button,
       .file-button {
-        min-width: 48px;
-        min-height: 44px;
-        padding: 11px 14px;
+        width: 100%;
+        min-width: 0;
+        height: 44px;
+        padding: 0 8px;
+        border-radius: 16px;
         font-size: 12px;
+        text-align: center;
       }
 
-      .divider {
-        height: 24px;
-        flex: 0 0 1px;
-      }
+      .divider { display: none; }
 
       .drop-card,
       .loader-card {
@@ -356,14 +373,21 @@
     }
 
     @media (max-width: 430px) {
-      button,
-      .file-button {
-        padding-inline: 12px;
+      .controls {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        padding: 9px;
+        border-radius: 24px 24px calc(20px + var(--safe-bottom)) calc(20px + var(--safe-bottom));
       }
 
-      .status {
-        display: none;
+      button,
+      .file-button {
+        height: 46px;
+        padding: 0 6px;
+        font-size: 12px;
       }
+
+      .status { display: none; }
     }
   </style>
 </head>
@@ -376,16 +400,16 @@
   </div>
 
   <div class="controls" aria-label="Preview controls">
-    <button type="button" data-view="hero" class="active">Hero</button>
-    <button type="button" data-view="front">Front</button>
-    <button type="button" data-view="side">Side</button>
-    <button type="button" data-view="top">Top</button>
-    <span class="divider"></span>
-    <label class="file-button">Texture<input id="textureInput" type="file" accept="image/png,image/jpeg,image/webp,image/avif" /></label>
-    <button type="button" id="resetTextureBtn">Original</button>
-    <button type="button" id="rotateBtn">Rotate</button>
-    <button type="button" id="themeToggle">Dark</button>
-    <button type="button" id="shotBtn">Shot</button>
+    <button type="button" data-view="hero" class="active" aria-label="Hero view">Hero</button>
+    <button type="button" data-view="front" aria-label="Front view">Front</button>
+    <button type="button" data-view="side" aria-label="Side view">Side</button>
+    <button type="button" data-view="top" aria-label="Top view">Top</button>
+    <span class="divider" aria-hidden="true"></span>
+    <label class="file-button" aria-label="Upload texture">Upload<input id="textureInput" type="file" accept="image/png,image/jpeg,image/webp,image/avif" /></label>
+    <button type="button" id="resetTextureBtn" aria-label="Reset original texture">Reset</button>
+    <button type="button" id="rotateBtn" aria-label="Toggle auto rotate">Spin</button>
+    <button type="button" id="themeToggle" aria-label="Toggle dark mode">Dark</button>
+    <button type="button" id="shotBtn" aria-label="Save screenshot">Save</button>
   </div>
 
   <div id="loader">
