@@ -1,11 +1,11 @@
 <!doctype html>
-<!-- v6: optimized full-screen viewer. Keeps the GLB geometry untouched and swaps only the exterior artwork texture atlas regions. Rendering uses adaptive pixel ratio, no preserved draw buffer, lighter shadows, and render-on-demand. -->
+<!-- v7: mobile-ready optimized full-screen viewer. Keeps GLB geometry untouched and swaps only exterior artwork texture atlas regions. Adds touch-safe sizing, mobile controls, dynamic viewport handling, and adaptive mobile render quality. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wine Case Wrap Preview · Optimized Exterior Texture Swap</title>
-  <meta name="description" content="Optimized full-screen GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Wine Case Wrap Preview · Mobile Optimized</title>
+  <meta name="description" content="Mobile-ready full-screen GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
   <style>
     :root {
       color-scheme: light;
@@ -23,6 +23,11 @@
       --drop-border: rgba(157, 107, 39, 0.54);
       --radius: 999px;
       --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --app-height: 100dvh;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
     }
 
     body.dark {
@@ -47,8 +52,14 @@
     body {
       width: 100%;
       height: 100%;
+      min-height: var(--app-height);
       margin: 0;
       overflow: hidden;
+      overscroll-behavior: none;
+      position: fixed;
+      inset: 0;
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
       color: var(--text);
       font-family: var(--font);
       background:
@@ -60,8 +71,11 @@
     #stage {
       position: fixed;
       inset: 0;
+      width: 100vw;
+      height: var(--app-height);
       overflow: hidden;
       isolation: isolate;
+      touch-action: none;
     }
 
     /* Keep the DOM layer cheap. The 3D grid handles visual grounding, so the old
@@ -74,15 +88,18 @@
       height: 100%;
       cursor: grab;
       outline: none;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     canvas:active { cursor: grabbing; }
 
     .topbar {
       position: fixed;
-      top: 18px;
-      left: 18px;
-      right: 18px;
+      top: calc(18px + var(--safe-top));
+      left: calc(18px + var(--safe-left));
+      right: calc(18px + var(--safe-right));
       z-index: 4;
       display: flex;
       align-items: center;
@@ -143,7 +160,7 @@
     .controls {
       position: fixed;
       left: 50%;
-      bottom: 18px;
+      bottom: calc(18px + var(--safe-bottom));
       z-index: 4;
       display: flex;
       align-items: center;
@@ -156,8 +173,8 @@
     button,
     .file-button {
       appearance: none;
-      min-height: 36px;
-      padding: 9px 13px;
+      min-height: 40px;
+      padding: 10px 14px;
       border: 1px solid transparent;
       border-radius: var(--radius);
       background: transparent;
@@ -281,22 +298,71 @@
 
     .error { color: #b3261e; }
 
-    @media (max-width: 760px) {
+    @media (max-width: 760px), (pointer: coarse) {
       .topbar {
-        top: 12px;
-        left: 12px;
-        right: 12px;
+        top: calc(10px + var(--safe-top));
+        left: calc(10px + var(--safe-left));
+        right: calc(10px + var(--safe-right));
         align-items: flex-start;
       }
 
       .title { display: none; }
-      .status { max-width: none; width: 100%; }
+
+      .status {
+        max-width: none;
+        width: 100%;
+        min-height: 36px;
+        padding: 8px 12px;
+        font-size: 11px;
+      }
 
       .controls {
-        width: calc(100vw - 20px);
+        left: calc(10px + var(--safe-left));
+        right: calc(10px + var(--safe-right));
+        bottom: calc(10px + var(--safe-bottom));
+        width: auto;
+        max-width: none;
+        transform: none;
         justify-content: flex-start;
+        gap: 5px;
+        padding: 7px;
         overflow-x: auto;
+        overscroll-behavior-x: contain;
         border-radius: 24px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .controls::-webkit-scrollbar { display: none; }
+
+      button,
+      .file-button {
+        min-width: 48px;
+        min-height: 44px;
+        padding: 11px 14px;
+        font-size: 12px;
+      }
+
+      .divider {
+        height: 24px;
+        flex: 0 0 1px;
+      }
+
+      .drop-card,
+      .loader-card {
+        width: min(420px, calc(100vw - 28px));
+        border-radius: 24px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      button,
+      .file-button {
+        padding-inline: 12px;
+      }
+
+      .status {
+        display: none;
       }
     }
   </style>
@@ -377,6 +443,10 @@
     let tweenActive = false;
     let restoreQualityTimer = null;
 
+    const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const isSmallScreen = Math.min(window.innerWidth, window.innerHeight) < 760;
+    const isMobileLike = isCoarsePointer || isSmallScreen;
+
     // The supplied GLB uses one baseColor texture atlas. The printed exterior artwork
     // occupies the left/middle atlas islands. The black interior + edge islands live
     // on the right side of the atlas. This viewer does not alter geometry, groups,
@@ -388,13 +458,14 @@
     const scene = new THREE.Scene();
     scene.background = null;
 
-    const MAX_IDLE_PIXEL_RATIO = 1.35;
-    const MAX_INTERACTION_PIXEL_RATIO = 1.0;
-    const MAX_SCREENSHOT_PIXEL_RATIO = 2.0;
+    const MAX_IDLE_PIXEL_RATIO = isMobileLike ? 1.0 : 1.35;
+    const MAX_INTERACTION_PIXEL_RATIO = isMobileLike ? 0.85 : 1.0;
+    const MAX_SCREENSHOT_PIXEL_RATIO = isMobileLike ? 1.5 : 2.0;
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !isMobileLike,
       alpha: true,
+      preserveDrawingBuffer: true,
       powerPreference: 'high-performance'
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -404,7 +475,8 @@
     renderer.shadowMap.type = THREE.PCFShadowMap;
     stage.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.01, 1000);
+    const viewport = getViewportSize();
+    const camera = new THREE.PerspectiveCamera(34, viewport.width / viewport.height, 0.01, 1000);
     camera.position.set(1.4, 0.8, 1.7);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -412,6 +484,14 @@
     controls.dampingFactor = 0.065;
     controls.autoRotateSpeed = 0.8;
     controls.target.set(0, 0, 0);
+    controls.screenSpacePanning = false;
+    controls.enablePan = !isMobileLike;
+    controls.rotateSpeed = isMobileLike ? 0.82 : 1.0;
+    controls.zoomSpeed = isMobileLike ? 0.72 : 1.0;
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_ROTATE
+    };
 
     const presentationGroup = new THREE.Group();
     scene.add(presentationGroup);
@@ -425,7 +505,7 @@
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.65);
     keyLight.position.set(3.5, 4.5, 4.0);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.mapSize.set(isMobileLike ? 512 : 1024, isMobileLike ? 512 : 1024);
     keyLight.shadow.camera.near = 0.01;
     keyLight.shadow.camera.far = 24;
     scene.add(keyLight);
@@ -446,17 +526,35 @@
     shadowPlane.receiveShadow = true;
     scene.add(shadowPlane);
 
-    let grid = new THREE.GridHelper(2, 16, 0x6d583d, 0x6d583d);
+    let grid = new THREE.GridHelper(2, isMobileLike ? 10 : 16, 0x6d583d, 0x6d583d);
     grid.material.transparent = true;
     grid.material.opacity = 0.09;
     scene.add(grid);
 
     const gltfLoader = new GLTFLoader();
     setRenderPixelRatio(getIdlePixelRatio());
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    syncViewportSize();
     applyTheme('light');
     loadModel(MODEL_PATH, 'Case_Wrap_01.glb');
     requestRender();
+
+    function getViewportSize() {
+      const width = Math.max(1, Math.round(window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth));
+      const height = Math.max(1, Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight));
+      return { width, height };
+    }
+
+    function syncViewportSize() {
+      const { width, height } = getViewportSize();
+      document.documentElement.style.setProperty('--app-height', `${height}px`);
+      renderer.setSize(width, height, false);
+    }
+
+    function updateCameraAspect() {
+      const { width, height } = getViewportSize();
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
 
     function getIdlePixelRatio() {
       return Math.min(window.devicePixelRatio || 1, MAX_IDLE_PIXEL_RATIO);
@@ -471,7 +569,7 @@
       if (Math.abs(activePixelRatio - nextRatio) < 0.01) return;
       activePixelRatio = nextRatio;
       renderer.setPixelRatio(activePixelRatio);
-      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      syncViewportSize();
     }
 
     function setInteractiveQuality(enabled) {
@@ -546,7 +644,7 @@
           updateStageHelpers();
           setView('hero', false);
           hideLoader();
-          setStatus(`${label} loaded · Drop an image to replace the exterior texture atlas only`);
+          setStatus(isMobileLike ? `${label} loaded · Tap Texture to replace exterior artwork` : `${label} loaded · Drop an image to replace exterior artwork only`);
           requestRender();
         },
         (event) => {
@@ -645,9 +743,11 @@
     function getTextureImageSize(image) {
       const width = image?.naturalWidth || image?.videoWidth || image?.width || 2048;
       const height = image?.naturalHeight || image?.videoHeight || image?.height || 2048;
+      const maxSize = isMobileLike ? 2048 : 4096;
+      const scale = Math.min(1, maxSize / Math.max(width, height));
       return {
-        width: Math.max(2, Math.round(width)),
-        height: Math.max(2, Math.round(height))
+        width: Math.max(2, Math.round(width * scale)),
+        height: Math.max(2, Math.round(height * scale))
       };
     }
 
@@ -779,7 +879,7 @@
       grid.geometry?.dispose?.();
       grid.material?.dispose?.();
       const gridColor = currentTheme === 'dark' ? 0xffffff : 0x6d583d;
-      grid = new THREE.GridHelper(helperSize, 14, gridColor, gridColor);
+      grid = new THREE.GridHelper(helperSize, isMobileLike ? 10 : 14, gridColor, gridColor);
       grid.position.y = bottom - modelRadius * 0.012;
       grid.material.transparent = true;
       grid.material.opacity = currentTheme === 'dark' ? 0.09 : 0.075;
@@ -916,12 +1016,21 @@
       requestRender();
     });
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+    function handleViewportChange() {
+      syncViewportSize();
+      updateCameraAspect();
       setRenderPixelRatio(interactionActive ? getInteractionPixelRatio() : getIdlePixelRatio());
       requestRender();
-    });
+    }
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('orientationchange', () => window.setTimeout(handleViewportChange, 120));
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+
+    document.addEventListener('touchmove', (event) => {
+      if (event.target.closest('.controls')) return;
+      event.preventDefault();
+    }, { passive: false });
 
     document.querySelectorAll('[data-view]').forEach((button) => {
       button.addEventListener('click', () => setView(button.dataset.view));
@@ -951,6 +1060,7 @@
 
     window.addEventListener('dragenter', (event) => {
       event.preventDefault();
+      if (isMobileLike) return;
       dragDepth += 1;
       dropZone.classList.add('visible');
     });
