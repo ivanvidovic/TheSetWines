@@ -1,11 +1,11 @@
 <!doctype html>
-<!-- v7: mobile-ready optimized full-screen viewer. Keeps GLB geometry untouched and swaps only exterior artwork texture atlas regions. Adds touch-safe sizing, mobile controls, dynamic viewport handling, and adaptive mobile render quality. -->
+<!-- v8: full-resolution texture quality build. Keeps GLB geometry untouched, swaps only exterior artwork texture atlas regions, and preserves uploaded texture resolution up to GPU limits. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Wine Case Wrap Preview · Mobile Optimized</title>
-  <meta name="description" content="Mobile-ready full-screen GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
+  <meta name="description" content="Full-resolution GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
   <style>
     :root {
       color-scheme: light;
@@ -458,9 +458,12 @@
     const scene = new THREE.Scene();
     scene.background = null;
 
-    const MAX_IDLE_PIXEL_RATIO = isMobileLike ? 1.0 : 1.35;
-    const MAX_INTERACTION_PIXEL_RATIO = isMobileLike ? 0.85 : 1.0;
-    const MAX_SCREENSHOT_PIXEL_RATIO = isMobileLike ? 1.5 : 2.0;
+    // v8 quality mode: render at true device pixel ratio instead of downsampling.
+    // This costs more GPU, but preserves texture crispness on high-density displays.
+    const FULL_QUALITY_PIXEL_RATIO = Math.max(1, window.devicePixelRatio || 1);
+    const MAX_IDLE_PIXEL_RATIO = FULL_QUALITY_PIXEL_RATIO;
+    const MAX_INTERACTION_PIXEL_RATIO = FULL_QUALITY_PIXEL_RATIO;
+    const MAX_SCREENSHOT_PIXEL_RATIO = FULL_QUALITY_PIXEL_RATIO;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isMobileLike,
@@ -684,6 +687,7 @@
       if (!material?.map || !mesh.geometry?.attributes?.uv) return;
 
       const originalMap = material.map;
+      upgradeTextureSampling(originalMap);
       const originalImage = originalMap.image;
       const uvPolygons = collectExteriorUvPolygons(mesh.geometry, materialIndex);
 
@@ -740,15 +744,47 @@
       return polygons;
     }
 
-    function getTextureImageSize(image) {
-      const width = image?.naturalWidth || image?.videoWidth || image?.width || 2048;
-      const height = image?.naturalHeight || image?.videoHeight || image?.height || 2048;
-      const maxSize = isMobileLike ? 2048 : 4096;
-      const scale = Math.min(1, maxSize / Math.max(width, height));
+    function getImagePixelSize(image) {
       return {
-        width: Math.max(2, Math.round(width * scale)),
-        height: Math.max(2, Math.round(height * scale))
+        width: image?.naturalWidth || image?.videoWidth || image?.width || 2048,
+        height: image?.naturalHeight || image?.videoHeight || image?.height || 2048
       };
+    }
+
+    function getCompositeTextureSize(originalImage, uploadedImage) {
+      const original = getImagePixelSize(originalImage);
+      const uploaded = getImagePixelSize(uploadedImage);
+
+      // Preserve the original atlas aspect ratio so the GLB UVs stay correct,
+      // but scale the atlas up enough to hold the uploaded mockup at full resolution
+      // whenever the GPU supports it. No arbitrary 2K/4K quality cap.
+      const maxTextureSize = renderer.capabilities.maxTextureSize || 8192;
+      const sourceScale = Math.max(
+        1,
+        uploaded.width / original.width,
+        uploaded.height / original.height
+      );
+      const gpuScale = Math.min(
+        sourceScale,
+        maxTextureSize / original.width,
+        maxTextureSize / original.height
+      );
+
+      return {
+        width: Math.max(2, Math.round(original.width * gpuScale)),
+        height: Math.max(2, Math.round(original.height * gpuScale)),
+        wasClamped: gpuScale < sourceScale
+      };
+    }
+
+    function upgradeTextureSampling(texture) {
+      if (!texture) return;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.needsUpdate = true;
     }
 
     function loadImageFromFile(file) {
@@ -768,11 +804,13 @@
     }
 
     function makeExteriorOnlyTexture(target, uploadedImage) {
-      const { width, height } = getTextureImageSize(target.originalImage);
+      const { width, height, wasClamped } = getCompositeTextureSize(target.originalImage, uploadedImage);
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d', { alpha: true });
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
 
       // Start from the original GLB texture so the black inside and edge regions remain exact.
       ctx.clearRect(0, 0, width, height);
@@ -797,10 +835,12 @@
       texture.flipY = false;
       texture.wrapS = target.originalMap.wrapS;
       texture.wrapT = target.originalMap.wrapT;
-      texture.minFilter = target.originalMap.minFilter;
-      texture.magFilter = target.originalMap.magFilter;
-      texture.generateMipmaps = target.originalMap.generateMipmaps;
-      texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4);
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.userData.wasClampedToGpuLimit = wasClamped;
+      texture.userData.textureSize = { width, height };
       texture.needsUpdate = true;
       return texture;
     }
@@ -828,7 +868,10 @@
           target.material.needsUpdate = true;
         });
 
-        setStatus(`${file.name} applied to exterior artwork only · geometry untouched`);
+        const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
+        const clamped = textureTargets.some((target) => target.replacementMap?.userData?.wasClampedToGpuLimit);
+        const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
+        setStatus(`${file.name} applied to exterior artwork only${qualityNote}${clamped ? ' · clamped only by GPU texture limit' : ''} · geometry untouched`);
         requestRender();
       } catch (error) {
         console.error(error);
