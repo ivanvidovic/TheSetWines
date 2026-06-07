@@ -1,227 +1,977 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<!-- v6: optimized full-screen viewer. Keeps the GLB geometry untouched and swaps only the exterior artwork texture atlas regions. Rendering uses adaptive pixel ratio, no preserved draw buffer, lighter shadows, and render-on-demand. -->
+<html lang="en">
 <head>
-    <title>3D Business Card Preview</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #0c0c0c;
-        }
-        canvas {
-            display: block;
-        }
-        #card-container {
-            /* No specific width/height needed */
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wine Case Wrap Preview · Optimized Exterior Texture Swap</title>
+  <meta name="description" content="Optimized full-screen GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
+  <style>
+    :root {
+      color-scheme: light;
+      --bg-0: #f8f5ef;
+      --bg-1: #eee7da;
+      --bg-2: #dfd2bf;
+      --glass: rgba(255, 252, 246, 0.72);
+      --line: rgba(51, 42, 32, 0.14);
+      --text: #241f18;
+      --muted: rgba(36, 31, 24, 0.58);
+      --accent: #9d6b27;
+      --shadow: rgba(62, 42, 22, 0.16);
+      --grid-line: rgba(74, 54, 32, 0.05);
+      --drop-bg: rgba(255, 252, 246, 0.84);
+      --drop-border: rgba(157, 107, 39, 0.54);
+      --radius: 999px;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body.dark {
+      color-scheme: dark;
+      --bg-0: #0d0d0c;
+      --bg-1: #1a1815;
+      --bg-2: #2a251e;
+      --glass: rgba(16, 15, 13, 0.68);
+      --line: rgba(255, 255, 255, 0.14);
+      --text: #f7f1e8;
+      --muted: rgba(247, 241, 232, 0.62);
+      --accent: #d9b66f;
+      --shadow: rgba(0, 0, 0, 0.28);
+      --grid-line: rgba(255, 255, 255, 0.035);
+      --drop-bg: rgba(10, 9, 7, 0.76);
+      --drop-border: rgba(244, 221, 170, 0.58);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-family: var(--font);
+      background:
+        radial-gradient(circle at 26% 18%, color-mix(in srgb, var(--accent) 17%, transparent), transparent 32%),
+        radial-gradient(circle at 80% 22%, rgba(255, 255, 255, 0.38), transparent 26%),
+        linear-gradient(145deg, var(--bg-0), var(--bg-1) 52%, var(--bg-2));
+    }
+
+    #stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    /* Keep the DOM layer cheap. The 3D grid handles visual grounding, so the old
+       full-screen CSS grid/mask overlay is removed for smoother interaction. */
+    #stage::before { display: none; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      outline: none;
+    }
+
+    canvas:active { cursor: grabbing; }
+
+    .topbar {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .title,
+    .status,
+    .controls {
+      pointer-events: auto;
+      border: 1px solid var(--line);
+      background: var(--glass);
+      box-shadow: 0 12px 34px var(--shadow);
+    }
+
+    .title {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .title strong,
+    .status strong { color: var(--text); font-weight: 700; }
+
+    .status {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 12px;
+      max-width: 52vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .controls {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px;
+      border-radius: var(--radius);
+      transform: translateX(-50%);
+    }
+
+    button,
+    .file-button {
+      appearance: none;
+      min-height: 36px;
+      padding: 9px 13px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    button:hover,
+    .file-button:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      transform: translateY(-1px);
+    }
+
+    button.active {
+      color: var(--text);
+      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+
+    .divider {
+      width: 1px;
+      height: 22px;
+      margin: 0 2px;
+      background: var(--line);
+    }
+
+    .file-button input { display: none; }
+
+    #loader {
+      position: fixed;
+      inset: 0;
+      z-index: 8;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: color-mix(in srgb, var(--bg-0) 54%, transparent);
+      transition: opacity 220ms ease, visibility 220ms ease;
+    }
+
+    #loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-card {
+      width: min(420px, calc(100vw - 48px));
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--glass);
+      box-shadow: 0 22px 80px var(--shadow);
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .progress {
+      width: 100%;
+      height: 5px;
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text) 9%, transparent);
+    }
+
+    .progress span {
+      display: block;
+      width: 8%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 180ms ease;
+    }
+
+    #dropZone {
+      position: fixed;
+      inset: 0;
+      z-index: 7;
+      display: grid;
+      place-items: center;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      background: color-mix(in srgb, var(--bg-0) 58%, transparent);
+      transition: opacity 160ms ease, visibility 160ms ease;
+    }
+
+    #dropZone.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .drop-card {
+      width: min(460px, calc(100vw - 48px));
+      padding: 28px;
+      border: 1px dashed var(--drop-border);
+      border-radius: 30px;
+      background: var(--drop-bg);
+      text-align: center;
+      box-shadow: 0 22px 80px var(--shadow);
+    }
+
+    .drop-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    .drop-card span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .error { color: #b3261e; }
+
+    @media (max-width: 760px) {
+      .topbar {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        align-items: flex-start;
+      }
+
+      .title { display: none; }
+      .status { max-width: none; width: 100%; }
+
+      .controls {
+        width: calc(100vw - 20px);
+        justify-content: flex-start;
+        overflow-x: auto;
+        border-radius: 24px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="card-container"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
-    <script>
-        // 1. Set up the scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.getElementById('card-container').appendChild(renderer.domElement);
-        renderer.setClearColor(0x0c0c0c);
+  <div id="stage" aria-label="3D wine case wrap preview"></div>
 
-        // 2. Add Orbit Controls
-        const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.screenSpacePanning = false;
-        controls.minDistance = 1;
-        controls.maxDistance = 10;
+  <div class="topbar">
+    <div class="title"><span class="dot"></span><strong>Case Wrap</strong><span>3D Preview</span></div>
+    <div class="status" id="statusText">Loading model</div>
+  </div>
 
-        // --- Gradient Functions ---
-        function createDiagonalGradientTexture(colors, width, height, inverted = false) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            const startX = inverted ? width : 0;
-            const startY = inverted ? 0 : height;
-            const endX = inverted ? 0 : width;
-            const endY = inverted ? height : 0;
-            const gradient = ctx.createLinearGradient(startX, startY, endX, endY); // Diagonal gradient
-            colors.forEach((color, index) => {
-                gradient.addColorStop(index / (colors.length - 1), color);
+  <div class="controls" aria-label="Preview controls">
+    <button type="button" data-view="hero" class="active">Hero</button>
+    <button type="button" data-view="front">Front</button>
+    <button type="button" data-view="side">Side</button>
+    <button type="button" data-view="top">Top</button>
+    <span class="divider"></span>
+    <label class="file-button">Texture<input id="textureInput" type="file" accept="image/png,image/jpeg,image/webp,image/avif" /></label>
+    <button type="button" id="resetTextureBtn">Original</button>
+    <button type="button" id="rotateBtn">Rotate</button>
+    <button type="button" id="themeToggle">Dark</button>
+    <button type="button" id="shotBtn">Shot</button>
+  </div>
+
+  <div id="loader">
+    <div class="loader-card">
+      <strong id="loaderText">Loading Case_Wrap_01.glb</strong>
+      <div class="progress"><span id="progressBar"></span></div>
+    </div>
+  </div>
+
+  <div id="dropZone">
+    <div class="drop-card">
+      <strong>Drop texture to replace exterior artwork only</strong>
+      <span>Geometry, groups, normals, and draw order are untouched. Interior and edge atlas regions remain black.</span>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const MODEL_PATH = './3d/Case_Wrap_01.glb';
+
+    const stage = document.getElementById('stage');
+    const loaderEl = document.getElementById('loader');
+    const loaderText = document.getElementById('loaderText');
+    const progressBar = document.getElementById('progressBar');
+    const statusText = document.getElementById('statusText');
+    const dropZone = document.getElementById('dropZone');
+    const themeToggle = document.getElementById('themeToggle');
+    const textureInput = document.getElementById('textureInput');
+    const resetTextureBtn = document.getElementById('resetTextureBtn');
+    const rotateBtn = document.getElementById('rotateBtn');
+    const shotBtn = document.getElementById('shotBtn');
+
+    let model = null;
+    let modelSize = new THREE.Vector3(1, 1, 1);
+    let modelRadius = 1;
+    let autoRotateEnabled = false;
+    let currentTheme = 'light';
+    let textureTargets = [];
+    let activePixelRatio = 0;
+    let renderLoopRunning = false;
+    let interactionActive = false;
+    let tweenActive = false;
+    let restoreQualityTimer = null;
+
+    // The supplied GLB uses one baseColor texture atlas. The printed exterior artwork
+    // occupies the left/middle atlas islands. The black interior + edge islands live
+    // on the right side of the atlas. This viewer does not alter geometry, groups,
+    // normals, or material slots. It makes a new texture image by drawing the uploaded
+    // mockup into the exterior UV polygons only, then assigns that new texture to the
+    // original material map.
+    const EXTERIOR_U_MAX = 0.695;
+
+    const scene = new THREE.Scene();
+    scene.background = null;
+
+    const MAX_IDLE_PIXEL_RATIO = 1.35;
+    const MAX_INTERACTION_PIXEL_RATIO = 1.0;
+    const MAX_SCREENSHOT_PIXEL_RATIO = 2.0;
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    stage.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.01, 1000);
+    camera.position.set(1.4, 0.8, 1.7);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.065;
+    controls.autoRotateSpeed = 0.8;
+    controls.target.set(0, 0, 0);
+
+    const presentationGroup = new THREE.Group();
+    scene.add(presentationGroup);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xefe3d0, 1.45);
+    scene.add(hemiLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.65);
+    keyLight.position.set(3.5, 4.5, 4.0);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.near = 0.01;
+    keyLight.shadow.camera.far = 24;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xfff1d4, 1.05);
+    fillLight.position.set(-4, 2, -3);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xd9e2ff, 0.76);
+    rimLight.position.set(-2, 4, 5);
+    scene.add(rimLight);
+
+    const shadowPlane = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 96),
+      new THREE.ShadowMaterial({ opacity: 0.14 })
+    );
+    shadowPlane.rotation.x = -Math.PI / 2;
+    shadowPlane.receiveShadow = true;
+    scene.add(shadowPlane);
+
+    let grid = new THREE.GridHelper(2, 16, 0x6d583d, 0x6d583d);
+    grid.material.transparent = true;
+    grid.material.opacity = 0.09;
+    scene.add(grid);
+
+    const gltfLoader = new GLTFLoader();
+    setRenderPixelRatio(getIdlePixelRatio());
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    applyTheme('light');
+    loadModel(MODEL_PATH, 'Case_Wrap_01.glb');
+    requestRender();
+
+    function getIdlePixelRatio() {
+      return Math.min(window.devicePixelRatio || 1, MAX_IDLE_PIXEL_RATIO);
+    }
+
+    function getInteractionPixelRatio() {
+      return Math.min(window.devicePixelRatio || 1, MAX_INTERACTION_PIXEL_RATIO);
+    }
+
+    function setRenderPixelRatio(pixelRatio) {
+      const nextRatio = Math.max(0.75, pixelRatio || 1);
+      if (Math.abs(activePixelRatio - nextRatio) < 0.01) return;
+      activePixelRatio = nextRatio;
+      renderer.setPixelRatio(activePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+    }
+
+    function setInteractiveQuality(enabled) {
+      if (restoreQualityTimer) {
+        window.clearTimeout(restoreQualityTimer);
+        restoreQualityTimer = null;
+      }
+
+      if (enabled) {
+        setRenderPixelRatio(getInteractionPixelRatio());
+      } else {
+        restoreQualityTimer = window.setTimeout(() => {
+          if (!interactionActive && !autoRotateEnabled && !tweenActive) {
+            setRenderPixelRatio(getIdlePixelRatio());
+            requestRender();
+          }
+        }, 180);
+      }
+    }
+
+    function requestRender() {
+      if (renderLoopRunning) return;
+      renderLoopRunning = true;
+      requestAnimationFrame(renderLoop);
+    }
+
+    function renderLoop() {
+      controls.autoRotate = autoRotateEnabled;
+      const cameraChanged = controls.update();
+      renderer.render(scene, camera);
+
+      if (autoRotateEnabled || interactionActive || tweenActive || cameraChanged) {
+        requestAnimationFrame(renderLoop);
+      } else {
+        renderLoopRunning = false;
+      }
+    }
+
+    function loadModel(source, label = 'model') {
+      showLoader(`Reading ${label}`);
+      setStatus(`Loading ${label}`);
+
+      gltfLoader.load(
+        source,
+        (gltf) => {
+          if (model) {
+            presentationGroup.remove(model);
+            disposeObject(model);
+          }
+
+          model = gltf.scene;
+          textureTargets = [];
+
+          model.traverse((child) => {
+            if (!child.isMesh) return;
+            child.castShadow = true;
+            child.receiveShadow = true;
+
+            // Keep the mesh exactly as authored. No geometry mutation.
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat) => {
+              if (!mat) return;
+              mat.envMapIntensity = 1.0;
+              stabilizeMaterialDepth(mat);
+              prepareTextureTarget(child, mat, Array.isArray(child.material) ? child.material.indexOf(mat) : 0);
             });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
-            return new THREE.CanvasTexture(canvas);
+          });
+
+          presentationGroup.rotation.set(0, 0, 0);
+          presentationGroup.add(model);
+          normalizeModel(model);
+          updateStageHelpers();
+          setView('hero', false);
+          hideLoader();
+          setStatus(`${label} loaded · Drop an image to replace the exterior texture atlas only`);
+          requestRender();
+        },
+        (event) => {
+          if (event.lengthComputable) {
+            const pct = Math.max(4, Math.round((event.loaded / event.total) * 100));
+            progressBar.style.width = `${pct}%`;
+            loaderText.textContent = `Loading ${label} ${pct}%`;
+          } else {
+            progressBar.style.width = '42%';
+            loaderText.textContent = `Loading ${label}`;
+          }
+        },
+        (error) => {
+          console.error(error);
+          progressBar.style.width = '100%';
+          loaderText.innerHTML = `<span class="error">Could not load ${label}.</span><br>Make sure the file is at <strong>${MODEL_PATH}</strong> and run the folder from a local server.`;
+          setStatus(`Could not load ${label}`);
         }
+      );
+    }
 
-        function createHorizontalGradientTexture(colors, width, height, inverted = false) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            const startX = inverted ? width : 0;
-            const endX = inverted ? 0 : width;
-            const gradient = ctx.createLinearGradient(startX, 0, endX, 0); // Horizontal gradient
-            colors.forEach((color, index) => {
-                gradient.addColorStop(index / (colors.length - 1), color);
-            });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
-            return new THREE.CanvasTexture(canvas);
+    function stabilizeMaterialDepth(material) {
+      // The source GLB marks the material as alphaMode BLEND. For this folded case wrap
+      // that can cause transparent-sort artifacts where one face appears over another.
+      // The atlas is effectively opaque in all used UV islands, so alphaTest + depthWrite
+      // gives correct depth without changing the authored mesh.
+      material.transparent = false;
+      material.opacity = 1;
+      material.alphaTest = 0.001;
+      material.depthTest = true;
+      material.depthWrite = true;
+      material.side = THREE.DoubleSide;
+      material.needsUpdate = true;
+    }
+
+    function prepareTextureTarget(mesh, material, materialIndex = 0) {
+      if (!material?.map || !mesh.geometry?.attributes?.uv) return;
+
+      const originalMap = material.map;
+      const originalImage = originalMap.image;
+      const uvPolygons = collectExteriorUvPolygons(mesh.geometry, materialIndex);
+
+      if (!originalImage || uvPolygons.length === 0) {
+        console.warn('No exterior UV polygons found for texture target:', mesh.name || mesh.uuid, material.name || material.uuid);
+        return;
+      }
+
+      textureTargets.push({
+        mesh,
+        material,
+        originalMap,
+        originalImage,
+        uvPolygons,
+        replacementMap: null
+      });
+    }
+
+    function collectExteriorUvPolygons(geometry, materialIndex = 0) {
+      const uv = geometry.attributes.uv;
+      const index = geometry.index;
+      const polygons = [];
+
+      const groups = geometry.groups?.length
+        ? geometry.groups
+        : [{ start: 0, count: index ? index.count : uv.count, materialIndex }];
+
+      groups.forEach((group) => {
+        const groupMaterialIndex = group.materialIndex ?? 0;
+        if (groupMaterialIndex !== materialIndex) return;
+
+        const end = group.start + group.count;
+        for (let i = group.start; i < end; i += 3) {
+          const a = index ? index.getX(i) : i;
+          const b = index ? index.getX(i + 1) : i + 1;
+          const c = index ? index.getX(i + 2) : i + 2;
+
+          const tri = [
+            { u: uv.getX(a), v: uv.getY(a) },
+            { u: uv.getX(b), v: uv.getY(b) },
+            { u: uv.getX(c), v: uv.getY(c) }
+          ];
+
+          const centerU = (tri[0].u + tri[1].u + tri[2].u) / 3;
+          const maxU = Math.max(tri[0].u, tri[1].u, tri[2].u);
+
+          // Exterior artwork islands are left of the black interior/edge atlas islands.
+          if (centerU <= EXTERIOR_U_MAX && maxU <= EXTERIOR_U_MAX + 0.012) {
+            polygons.push(tri);
+          }
         }
+      });
 
-        function createVerticalGradientTexture(colors, width, height, inverted = false) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            const startY = inverted ? height : 0;
-            const endY = inverted ? 0 : height;
-            const gradient = ctx.createLinearGradient(0, startY, 0, endY); // Vertical gradient
-            colors.forEach((color, index) => {
-                gradient.addColorStop(index / (colors.length - 1), color);
-            });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
-            return new THREE.CanvasTexture(canvas);
-        }
+      return polygons;
+    }
 
-        // 3. Load Textures and Create Geometry
-        const textureLoader = new THREE.TextureLoader();
+    function getTextureImageSize(image) {
+      const width = image?.naturalWidth || image?.videoWidth || image?.width || 2048;
+      const height = image?.naturalHeight || image?.videoHeight || image?.height || 2048;
+      return {
+        width: Math.max(2, Math.round(width)),
+        height: Math.max(2, Math.round(height))
+      };
+    }
 
-        textureLoader.load('./frontA.png', function (frontATexture) {
-            const cardAspectRatio = frontATexture.image.width / frontATexture.image.height;
-            let cardHeight = 3.5;
-            let cardWidth = cardHeight * cardAspectRatio;
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(image);
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error(`Could not read ${file.name}`));
+        };
+        image.src = url;
+      });
+    }
 
-            // Make the card 20% smaller
-            cardHeight *= 0.8;
-            cardWidth *= 0.8;
+    function makeExteriorOnlyTexture(target, uploadedImage) {
+      const { width, height } = getTextureImageSize(target.originalImage);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { alpha: true });
 
-            const cardDepth = 0.05;
-            const cardGeometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth);
+      // Start from the original GLB texture so the black inside and edge regions remain exact.
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(target.originalImage, 0, 0, width, height);
 
-            textureLoader.load('./backA.png', function (backATexture) {
-                // Texture Filtering for sharpness
-                frontATexture.minFilter = THREE.LinearFilter;
-                frontATexture.magFilter = THREE.LinearFilter;
-                backATexture.minFilter = THREE.LinearFilter;
-                backATexture.magFilter = THREE.LinearFilter;
+      // Then draw the uploaded mockup only through the exterior UV polygon mask.
+      ctx.save();
+      ctx.beginPath();
+      target.uvPolygons.forEach((tri) => {
+        ctx.moveTo(tri[0].u * width, tri[0].v * height);
+        ctx.lineTo(tri[1].u * width, tri[1].v * height);
+        ctx.lineTo(tri[2].u * width, tri[2].v * height);
+        ctx.closePath();
+      });
+      ctx.clip();
+      ctx.drawImage(uploadedImage, 0, 0, width, height);
+      ctx.restore();
 
-                // --- Create Gradient Textures ---
-                const gradientColors = ['#6300ff', '#9505bc', '#e41d4b', '#fa7638', '#ffb921'];
-                const verticalGradientTexture = createVerticalGradientTexture(gradientColors, 10, 200);
-                const invertedVerticalGradientTexture = createVerticalGradientTexture([...gradientColors].reverse(), 10, 200);
-                const horizontalGradientTexture = createHorizontalGradientTexture(gradientColors, 200, 10);
-                const invertedHorizontalGradientTexture = createHorizontalGradientTexture([...gradientColors].reverse(), 200, 10);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.name = `Exterior composite from ${uploadedImage.src?.split('/').pop() || 'uploaded texture'}`;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.flipY = false;
+      texture.wrapS = target.originalMap.wrapS;
+      texture.wrapT = target.originalMap.wrapT;
+      texture.minFilter = target.originalMap.minFilter;
+      texture.magFilter = target.originalMap.magFilter;
+      texture.generateMipmaps = target.originalMap.generateMipmaps;
+      texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4);
+      texture.needsUpdate = true;
+      return texture;
+    }
 
-                verticalGradientTexture.needsUpdate = true;
-                invertedVerticalGradientTexture.needsUpdate = true;
-                horizontalGradientTexture.needsUpdate = true;
-                invertedHorizontalGradientTexture.needsUpdate = true;
+    async function applyTextureFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        setStatus('Drop a texture image: PNG, JPG, WebP, or AVIF');
+        return;
+      }
+      if (!model || textureTargets.length === 0) {
+        setStatus('Model is not ready yet or no texture-mapped material was found');
+        return;
+      }
 
-                // 5. Create Individual Materials for Each Card
-                const createCardMaterials = (frontMap, backMap) => [
-                    new THREE.MeshBasicMaterial({ map: invertedVerticalGradientTexture }), // Right
-                    new THREE.MeshBasicMaterial({ map: verticalGradientTexture }), // Left
-                    new THREE.MeshBasicMaterial({ map: horizontalGradientTexture }), // Top
-                    new THREE.MeshBasicMaterial({ map: invertedHorizontalGradientTexture }), // Bottom - Inverted
-                    new THREE.MeshBasicMaterial({ map: frontMap }),             // Front
-                    new THREE.MeshBasicMaterial({ map: backMap })              // Back
-                ];
+      try {
+        setStatus(`Applying exterior texture: ${file.name}`);
+        const uploadedImage = await loadImageFromFile(file);
 
-                // Create the top card (cardA) with its own materials
-                const cardAMaterials = createCardMaterials(frontATexture, backATexture);
-                cardA = new THREE.Mesh(cardGeometry, cardAMaterials);
-                cardA.position.y = cardHeight + 0.5; // Position above the middle card (adjust spacing)
-                scene.add(cardA);
-
-                // Create the middle card (cardB)
-                const cardBMaterials = createCardMaterials(frontATexture, backATexture);
-                cardB = new THREE.Mesh(cardGeometry, cardBMaterials);
-                scene.add(cardB);
-
-                // Load the new front texture for cardB
-                textureLoader.load('./frontB.png', function (newFrontBTexture) {
-                    newFrontBTexture.minFilter = THREE.LinearFilter;
-                    newFrontBTexture.magFilter = THREE.LinearFilter;
-                    cardB.material[4].map = newFrontBTexture;
-                    cardB.material[4].map.needsUpdate = true;
-                });
-
-                // Load the new back texture for cardB
-                textureLoader.load('./backB.png', function (backBTexture) {
-                    backBTexture.minFilter = THREE.LinearFilter;
-                    backBTexture.magFilter = THREE.LinearFilter;
-                    const backBMaterial = new THREE.MeshBasicMaterial({ map: backBTexture });
-                    cardB.material[5] = backBMaterial; // Update only the back face material for cardB
-                    cardB.material[5].needsUpdate = true;
-                });
-
-                // Create the bottom card (cardC)
-                const cardCMaterials = createCardMaterials(frontATexture, backATexture);
-                cardC = new THREE.Mesh(cardGeometry, cardCMaterials);
-                cardC.position.y = -(cardHeight + 0.5); // Position below the middle card (adjust spacing)
-                scene.add(cardC);
-
-                // Load the new front texture for cardC
-                textureLoader.load('./frontC.png', function (newFrontCTexture) {
-                    newFrontCTexture.minFilter = THREE.LinearFilter;
-                    newFrontCTexture.magFilter = THREE.LinearFilter;
-                    cardC.material[4].map = newFrontCTexture;
-                    cardC.material[4].map.needsUpdate = true;
-                });
-
-                // Load the new back texture for cardC
-                textureLoader.load('./backC.png', function (backCTexture) {
-                    backCTexture.minFilter = THREE.LinearFilter;
-                    backCTexture.magFilter = THREE.LinearFilter;
-                    const backCMaterial = new THREE.MeshBasicMaterial({ map: backCTexture });
-                    cardC.material[5] = backCMaterial; // Update only the back face material for cardC
-                    cardC.material[5].needsUpdate = true;
-                });
-
-                // 8. Animation Loop
-                let rotationSpeed = -0.01;
-                rotationSpeed *= 0.7;   // Slow down by 30%
-                function animate() {
-                    requestAnimationFrame(animate);
-                    cardB.rotation.y += rotationSpeed;
-                    cardA.rotation.y += rotationSpeed;
-                    cardC.rotation.y += rotationSpeed;
-                    controls.update();
-
-                    // Render the scene
-                    renderer.render(scene, camera);
-                }
-                animate();
-            });
+        textureTargets.forEach((target) => {
+          if (target.replacementMap) target.replacementMap.dispose();
+          target.replacementMap = makeExteriorOnlyTexture(target, uploadedImage);
+          target.material.map = target.replacementMap;
+          stabilizeMaterialDepth(target.material);
+          target.material.needsUpdate = true;
         });
 
-        // 6. Position the Camera
-        camera.position.z = 8; // Moved the camera back
+        setStatus(`${file.name} applied to exterior artwork only · geometry untouched`);
+        requestRender();
+      } catch (error) {
+        console.error(error);
+        setStatus(`Could not apply texture: ${file.name}`);
+      }
+    }
 
-        // 7. Add Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(ambientLight);
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(1, 1, 2);
-        scene.add(directionalLight);
-
-        // 9. Handle Window Resizing
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+    function resetExteriorTexture() {
+      textureTargets.forEach((target) => {
+        if (target.replacementMap) {
+          target.replacementMap.dispose();
+          target.replacementMap = null;
         }
-    </script>
+        target.material.map = target.originalMap;
+        stabilizeMaterialDepth(target.material);
+        target.material.needsUpdate = true;
+      });
+
+      if (textureInput) textureInput.value = '';
+      setStatus('Original texture restored');
+      requestRender();
+    }
+
+    function normalizeModel(object) {
+      object.updateWorldMatrix(true, true);
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      object.position.sub(center);
+
+      object.updateWorldMatrix(true, true);
+      const centeredBox = new THREE.Box3().setFromObject(object);
+      modelSize = centeredBox.getSize(new THREE.Vector3());
+      modelRadius = Math.max(0.1, modelSize.length() * 0.5);
+
+      controls.minDistance = Math.max(0.05, modelRadius * 0.28);
+      controls.maxDistance = Math.max(5, modelRadius * 8);
+      camera.near = Math.max(0.001, modelRadius / 200);
+      camera.far = Math.max(100, modelRadius * 100);
+      camera.updateProjectionMatrix();
+    }
+
+    function updateStageHelpers() {
+      const helperSize = Math.max(modelSize.x, modelSize.z, modelSize.y) * 1.8;
+      const box = new THREE.Box3().setFromObject(presentationGroup);
+      const bottom = box.min.y;
+
+      scene.remove(grid);
+      grid.geometry?.dispose?.();
+      grid.material?.dispose?.();
+      const gridColor = currentTheme === 'dark' ? 0xffffff : 0x6d583d;
+      grid = new THREE.GridHelper(helperSize, 14, gridColor, gridColor);
+      grid.position.y = bottom - modelRadius * 0.012;
+      grid.material.transparent = true;
+      grid.material.opacity = currentTheme === 'dark' ? 0.09 : 0.075;
+      scene.add(grid);
+
+      shadowPlane.geometry.dispose();
+      shadowPlane.geometry = new THREE.CircleGeometry(helperSize * 0.52, 96);
+      shadowPlane.position.set(0, bottom - modelRadius * 0.014, 0);
+    }
+
+    function setView(view, smooth = true) {
+      const r = Math.max(modelRadius, 0.65);
+      const positions = {
+        hero: new THREE.Vector3(r * 1.65, r * 0.95, r * 1.85),
+        front: new THREE.Vector3(0, r * 0.18, r * 2.55),
+        side: new THREE.Vector3(r * 2.55, r * 0.18, 0.001),
+        top: new THREE.Vector3(0.001, r * 2.75, 0.001),
+      };
+
+      const targetPosition = positions[view] || positions.hero;
+      controls.target.set(0, 0, 0);
+
+      if (!smooth) {
+        camera.position.copy(targetPosition);
+        camera.lookAt(0, 0, 0);
+        controls.update();
+        updateActiveView(view);
+        requestRender();
+        return;
+      }
+
+      tweenCamera(camera.position.clone(), targetPosition, 420, () => {
+        controls.target.set(0, 0, 0);
+        camera.lookAt(controls.target);
+        controls.update();
+      });
+      updateActiveView(view);
+    }
+
+    function tweenCamera(from, to, duration, onUpdate) {
+      const start = performance.now();
+      const ease = (t) => 1 - Math.pow(1 - t, 3);
+      tweenActive = true;
+      setInteractiveQuality(true);
+      requestRender();
+
+      function tick(now) {
+        const t = Math.min(1, (now - start) / duration);
+        camera.position.lerpVectors(from, to, ease(t));
+        onUpdate();
+        requestRender();
+        if (t < 1) {
+          requestAnimationFrame(tick);
+        } else {
+          tweenActive = false;
+          setInteractiveQuality(false);
+          requestRender();
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function updateActiveView(view) {
+      document.querySelectorAll('[data-view]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.view === view);
+      });
+    }
+
+    function applyTheme(theme) {
+      currentTheme = theme;
+      document.body.classList.toggle('dark', theme === 'dark');
+      document.documentElement.style.colorScheme = theme;
+      themeToggle.textContent = theme === 'dark' ? 'Light' : 'Dark';
+      renderer.toneMappingExposure = theme === 'dark' ? 1.02 : 1.08;
+      hemiLight.intensity = theme === 'dark' ? 1.12 : 1.45;
+      keyLight.intensity = theme === 'dark' ? 2.2 : 2.65;
+      fillLight.intensity = theme === 'dark' ? 0.66 : 1.05;
+      rimLight.intensity = theme === 'dark' ? 1.0 : 0.76;
+      shadowPlane.material.opacity = theme === 'dark' ? 0.22 : 0.14;
+      if (model) updateStageHelpers();
+      requestRender();
+    }
+
+    function takeScreenshot() {
+      const previousRatio = activePixelRatio || getIdlePixelRatio();
+      setRenderPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_SCREENSHOT_PIXEL_RATIO));
+      renderer.render(scene, camera);
+
+      const link = document.createElement('a');
+      link.download = 'case-wrap-preview.png';
+      link.href = renderer.domElement.toDataURL('image/png');
+      link.click();
+
+      setRenderPixelRatio(previousRatio);
+      requestRender();
+      setStatus('Screenshot saved');
+    }
+
+    function showLoader(message) {
+      loaderEl.classList.remove('hidden');
+      progressBar.style.width = '8%';
+      loaderText.textContent = message;
+    }
+
+    function hideLoader() {
+      progressBar.style.width = '100%';
+      window.setTimeout(() => loaderEl.classList.add('hidden'), 180);
+    }
+
+    function setStatus(message) {
+      statusText.textContent = message;
+    }
+
+    function disposeObject(object) {
+      object.traverse((child) => {
+        if (!child.isMesh) return;
+        child.geometry?.dispose?.();
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((mat) => mat?.dispose?.());
+      });
+    }
+
+    controls.addEventListener('start', () => {
+      interactionActive = true;
+      setInteractiveQuality(true);
+      requestRender();
+    });
+
+    controls.addEventListener('change', requestRender);
+
+    controls.addEventListener('end', () => {
+      interactionActive = false;
+      setInteractiveQuality(false);
+      requestRender();
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      setRenderPixelRatio(interactionActive ? getInteractionPixelRatio() : getIdlePixelRatio());
+      requestRender();
+    });
+
+    document.querySelectorAll('[data-view]').forEach((button) => {
+      button.addEventListener('click', () => setView(button.dataset.view));
+    });
+
+    rotateBtn.addEventListener('click', () => {
+      autoRotateEnabled = !autoRotateEnabled;
+      rotateBtn.classList.toggle('active', autoRotateEnabled);
+      setInteractiveQuality(autoRotateEnabled);
+      requestRender();
+      setStatus(autoRotateEnabled ? 'Auto-rotate on' : 'Auto-rotate off');
+    });
+
+    themeToggle.addEventListener('click', () => {
+      applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+      setStatus(currentTheme === 'dark' ? 'Dark mode' : 'Light mode');
+    });
+
+    textureInput.addEventListener('change', (event) => {
+      applyTextureFile(event.target.files?.[0]);
+    });
+
+    resetTextureBtn.addEventListener('click', resetExteriorTexture);
+    shotBtn.addEventListener('click', takeScreenshot);
+
+    let dragDepth = 0;
+
+    window.addEventListener('dragenter', (event) => {
+      event.preventDefault();
+      dragDepth += 1;
+      dropZone.classList.add('visible');
+    });
+
+    window.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    });
+
+    window.addEventListener('dragleave', (event) => {
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) dropZone.classList.remove('visible');
+    });
+
+    window.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dragDepth = 0;
+      dropZone.classList.remove('visible');
+      applyTextureFile(event.dataTransfer.files?.[0]);
+    });
+  </script>
 </body>
 </html>
