@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v24: fixes packaging/loader issue, includes the 3d GLB, and prevents stale loader errors from covering a loaded model. -->
+<!-- v25: improves mobile vertical framing and makes the bottom control dock compact, centered, and non-cramped across portrait and landscape. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -170,6 +170,7 @@
       align-items: flex-end;
       justify-content: center;
       gap: 6px;
+      width: max-content;
       max-width: calc(100vw - 28px - var(--safe-left) - var(--safe-right));
       padding: 8px 10px 10px;
       border-radius: 28px;
@@ -377,16 +378,16 @@
 
 
       .controls {
-        left: calc(8px + var(--safe-left));
-        right: calc(8px + var(--safe-right));
+        left: 50%;
+        right: auto;
         bottom: calc(8px + var(--safe-bottom));
-        width: auto;
-        max-width: none;
+        width: max-content;
+        max-width: calc(100vw - 14px - var(--safe-left) - var(--safe-right));
         height: 54px;
-        transform: none;
-        justify-content: flex-start;
+        transform: translateX(-50%);
+        justify-content: center;
         align-items: center;
-        gap: 4px;
+        gap: clamp(3px, 1.15vw, 7px);
         padding: 6px;
         overflow-x: auto;
         overflow-y: hidden;
@@ -399,7 +400,7 @@
 
       .control-item {
         gap: 0;
-        min-width: 40px;
+        min-width: clamp(36px, 9.2vw, 42px);
       }
 
       .control-label {
@@ -408,19 +409,19 @@
 
       button,
       .file-button {
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
+        width: clamp(36px, 9.2vw, 42px);
+        height: clamp(36px, 9.2vw, 42px);
+        min-width: clamp(36px, 9.2vw, 42px);
       }
 
       .icon {
-        width: 18px;
-        height: 18px;
+        width: clamp(16px, 4.3vw, 18px);
+        height: clamp(16px, 4.3vw, 18px);
       }
 
       .divider {
         height: 22px;
-        margin: 0 1px;
+        margin: 0 clamp(0px, 0.5vw, 2px);
       }
 
       .drop-card,
@@ -432,28 +433,64 @@
 
     @media (max-width: 430px) {
       .controls {
-        height: 50px;
+        height: 48px;
         bottom: calc(6px + var(--safe-bottom));
         padding: 5px;
-        gap: 3px;
+        gap: 2px;
+        max-width: calc(100vw - 10px - var(--safe-left) - var(--safe-right));
       }
 
       .control-item {
-        min-width: 38px;
+        min-width: 34px;
       }
 
       button,
       .file-button {
-        width: 38px;
-        height: 38px;
-        min-width: 38px;
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
       }
 
       .icon {
-        width: 17px;
-        height: 17px;
+        width: 16px;
+        height: 16px;
       }
     }
+
+    @media (max-width: 930px) and (orientation: landscape) and (pointer: coarse) {
+      .controls {
+        left: 50%;
+        right: auto;
+        width: max-content;
+        max-width: calc(100vw - 18px - var(--safe-left) - var(--safe-right));
+        transform: translateX(-50%);
+        justify-content: center;
+        height: 48px;
+        padding: 5px 6px;
+        gap: 4px;
+      }
+
+      .control-item {
+        min-width: 36px;
+      }
+
+      button,
+      .file-button {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+      }
+
+      .icon {
+        width: 16px;
+        height: 16px;
+      }
+
+      .divider {
+        height: 20px;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -1253,22 +1290,39 @@
       shadowPlane.position.set(0, bottom + 0.0008, 0);
     }
 
+    function getMobileDockInsetRatio() {
+      if (!isMobileLike) return 0;
+      const { height } = getViewportSize();
+      const dockHeight = height < 430 && window.innerWidth > window.innerHeight ? 56 : 66;
+      return Math.min(0.2, dockHeight / Math.max(1, height));
+    }
+
     function getFitDistance(multiplier = 1.55) {
       const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z, 0.1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+      const usableHeightRatio = Math.max(0.72, 1 - getMobileDockInsetRatio());
+      const effectiveVerticalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * usableHeightRatio);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
-      const verticalDistance = maxDim / (2 * Math.tan(verticalFov / 2));
+      const verticalDistance = maxDim / (2 * Math.tan(effectiveVerticalFov / 2));
       const horizontalDistance = maxDim / (2 * Math.tan(horizontalFov / 2));
-      return Math.max(verticalDistance, horizontalDistance, modelRadius * 1.85) * multiplier;
+      return Math.max(verticalDistance, horizontalDistance, modelRadius * 1.55) * multiplier;
+    }
+
+    function getViewFitMultiplier() {
+      if (!isMobileLike) return 1.52;
+      const { width, height } = getViewportSize();
+      return height >= width ? 1.38 : 1.48;
     }
 
     function setView(view, smooth = true) {
-      const fit = getFitDistance(isMobileLike ? 1.78 : 1.68);
-      const heroDirection = new THREE.Vector3(1.12, 0.42, 1.32).normalize();
+      const fit = getFitDistance(getViewFitMultiplier());
+      const { width, height } = getViewportSize();
+      const isPortraitMobile = isMobileLike && height >= width;
+      const heroDirection = new THREE.Vector3(1.12, isPortraitMobile ? 0.34 : 0.40, 1.32).normalize();
       const positions = {
-        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * 1.12)),
-        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * 1.08)),
-        side: orbitTarget.clone().add(new THREE.Vector3(fit * 1.08, 0, 0.001)),
+        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * (isPortraitMobile ? 1.0 : 1.06))),
+        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * (isPortraitMobile ? 0.98 : 1.04))),
+        side: orbitTarget.clone().add(new THREE.Vector3(fit * (isPortraitMobile ? 0.98 : 1.04), 0, 0.001)),
       };
 
       const targetPosition = positions[view] || positions.hero;
@@ -1394,6 +1448,8 @@
       syncViewportSize();
       updateCameraAspect();
       setRenderPixelRatio(interactionActive ? getInteractionPixelRatio() : getIdlePixelRatio());
+      const activeViewButton = document.querySelector('[data-view].active');
+      if (model && activeViewButton) setView(activeViewButton.dataset.view, false);
       requestRender();
     }
 
