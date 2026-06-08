@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v37: uses the standard Lucide rotate-cw icon for the Rotate control. -->
+<!-- v38: adds more left/right padding to the mobile control dock so the end icons and labels do not feel crammed against the outer edges. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -401,7 +401,7 @@
         justify-content: center;
         align-items: center;
         gap: clamp(3px, 1.15vw, 7px);
-        padding: 6px;
+        padding: 6px 12px;
         overflow-x: auto;
         overflow-y: hidden;
         overscroll-behavior-x: contain;
@@ -454,7 +454,7 @@
       .controls {
         height: 56px;
         bottom: calc(6px + var(--safe-bottom));
-        padding: 5px;
+        padding: 5px 10px;
         gap: 2px;
         max-width: calc(100vw - 10px - var(--safe-left) - var(--safe-right));
       }
@@ -485,7 +485,7 @@
         transform: translateX(-50%);
         justify-content: center;
         height: 56px;
-        padding: 5px 6px;
+        padding: 5px 10px;
         gap: 4px;
       }
 
