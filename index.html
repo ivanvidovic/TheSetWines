@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v22: mockup cycler. Auto-loads the first PNG mockup and cycles only through mockup files, not the embedded GLB artwork. -->
+<!-- v24: fixes packaging/loader issue, includes the 3d GLB, and prevents stale loader errors from covering a loaded model. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -487,7 +487,6 @@
     <span class="divider" aria-hidden="true"></span>
     <div class="control-item"><button type="button" id="prevMockupBtn" aria-label="Previous mockup" title="Previous mockup"><svg class="icon"><use href="#i-prev"></use></svg><span class="sr-only">Previous mockup</span></button><span class="control-label">Prev</span></div>
     <div class="control-item"><button type="button" id="nextMockupBtn" aria-label="Next mockup" title="Next mockup"><svg class="icon"><use href="#i-next"></use></svg><span class="sr-only">Next mockup</span></button><span class="control-label">Next</span></div>
-    <div class="control-item"><button type="button" id="firstMockupBtn" aria-label="First mockup" title="First mockup"><svg class="icon"><use href="#i-reset"></use></svg><span class="sr-only">First mockup</span></button><span class="control-label">First</span></div>
     <div class="control-item"><button type="button" id="rotateBtn" aria-label="Toggle auto rotate" title="Toggle spin"><svg class="icon"><use href="#i-spin"></use></svg><span class="sr-only">Toggle spin</span></button><span class="control-label">Spin</span></div>
     <div class="control-item"><button type="button" id="gridToggleBtn" class="active" aria-label="Toggle grid" title="Toggle grid"><svg class="icon"><use href="#i-grid"></use></svg><span class="sr-only">Toggle grid</span></button><span class="control-label">Grid</span></div>
     <div class="control-item"><button type="button" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme"><svg class="icon icon-moon"><use href="#i-moon"></use></svg><svg class="icon icon-sun"><use href="#i-sun"></use></svg><span class="sr-only">Toggle theme</span></button><span class="control-label">Dark</span></div>
@@ -544,7 +543,6 @@
     const themeToggle = document.getElementById('themeToggle');
     const prevMockupBtn = document.getElementById('prevMockupBtn');
     const nextMockupBtn = document.getElementById('nextMockupBtn');
-    const firstMockupBtn = document.getElementById('firstMockupBtn');
     const rotateBtn = document.getElementById('rotateBtn');
     const gridToggleBtn = document.getElementById('gridToggleBtn');
     const shotBtn = document.getElementById('shotBtn');
@@ -557,6 +555,11 @@
     let currentTheme = 'light';
     let textureTargets = [];
     let currentMockupIndex = 0;
+    let currentMockupImage = null;
+    let idleStartTimer = null;
+    let autoCycleTimer = null;
+    let autoCycleActive = false;
+    let crossfadeToken = 0;
     let activePixelRatio = 0;
     let renderLoopRunning = false;
     let interactionActive = false;
@@ -574,6 +577,9 @@
     // mockup into the exterior UV polygons only, then assigns that new texture to the
     // original material map.
     const EXTERIOR_U_MAX = 0.695;
+    const IDLE_DELAY_MS = 5000;
+    const MOCKUP_HOLD_MS = 10000;
+    const MOCKUP_FADE_MS = 650;
 
     const scene = new THREE.Scene();
     scene.background = null;
@@ -781,6 +787,7 @@
           updateStageHelpers();
           setView('hero', false);
           applyMockupByIndex(0, false);
+          startIdleCountdown();
           hideLoader();
           requestRender();
         },
@@ -796,8 +803,16 @@
         },
         (error) => {
           console.error(error);
+
+          if (model && presentationGroup.children.includes(model)) {
+            hideLoader();
+            setStatus(`${label} loaded`);
+            requestRender();
+            return;
+          }
+
           progressBar.style.width = '100%';
-          loaderText.innerHTML = `<span class="error">Could not load ${label}.</span><br>Make sure the file is at <strong>${MODEL_PATH}</strong> and run the folder from a local server.`;
+          loaderText.innerHTML = `<span class="error">Could not load ${label}.</span><br>Expected path: <strong>${MODEL_PATH}</strong><br>Run the project folder from a local server.`;
           setStatus(`Could not load ${label}`);
         }
       );
@@ -946,15 +961,109 @@
       });
     }
 
+    function clearAutoCycleTimers() {
+      if (idleStartTimer) {
+        window.clearTimeout(idleStartTimer);
+        idleStartTimer = null;
+      }
+      if (autoCycleTimer) {
+        window.clearTimeout(autoCycleTimer);
+        autoCycleTimer = null;
+      }
+    }
+
+    function scheduleAutoCycleAdvance() {
+      if (!autoCycleActive) return;
+      if (autoCycleTimer) window.clearTimeout(autoCycleTimer);
+      autoCycleTimer = window.setTimeout(() => {
+        fadeToMockup(currentMockupIndex + 1, true);
+      }, MOCKUP_HOLD_MS);
+    }
+
+    function startIdleCountdown() {
+      clearAutoCycleTimers();
+      autoCycleActive = false;
+      idleStartTimer = window.setTimeout(() => {
+        autoCycleActive = true;
+        scheduleAutoCycleAdvance();
+      }, IDLE_DELAY_MS);
+    }
+
+    function noteUserInteraction() {
+      autoCycleActive = false;
+      crossfadeToken += 1;
+      clearAutoCycleTimers();
+      startIdleCountdown();
+    }
+
+    function ensureReplacementMap(target, width, height) {
+      if (!target.compositeCanvas || target.compositeCanvas.width !== width || target.compositeCanvas.height !== height || !target.replacementMap) {
+        if (target.replacementMap) target.replacementMap.dispose();
+        target.compositeCanvas = document.createElement('canvas');
+        target.compositeCanvas.width = width;
+        target.compositeCanvas.height = height;
+        target.compositeCtx = target.compositeCanvas.getContext('2d', { alpha: true });
+        target.compositeCtx.imageSmoothingEnabled = true;
+        target.compositeCtx.imageSmoothingQuality = 'high';
+
+        const texture = new THREE.CanvasTexture(target.compositeCanvas);
+        texture.name = 'Exterior composite texture';
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.flipY = false;
+        texture.wrapS = target.originalMap.wrapS;
+        texture.wrapT = target.originalMap.wrapT;
+        texture.generateMipmaps = true;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        target.replacementMap = texture;
+      }
+      return target.replacementMap;
+    }
+
+    function drawCompositeTexture(target, imageA, imageB = null, blend = 0) {
+      const { width, height, wasClamped } = getCompositeTextureSize(target.originalImage, imageB || imageA || target.originalImage);
+      const texture = ensureReplacementMap(target, width, height);
+      const ctx = target.compositeCtx;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(target.originalImage, 0, 0, width, height);
+      ctx.save();
+      ctx.beginPath();
+      target.uvPolygons.forEach((tri) => {
+        ctx.moveTo(tri[0].u * width, tri[0].v * height);
+        ctx.lineTo(tri[1].u * width, tri[1].v * height);
+        ctx.lineTo(tri[2].u * width, tri[2].v * height);
+        ctx.closePath();
+      });
+      ctx.clip();
+      if (imageA) ctx.drawImage(imageA, 0, 0, width, height);
+      if (imageB && blend > 0) {
+        ctx.globalAlpha = Math.min(1, Math.max(0, blend));
+        ctx.drawImage(imageB, 0, 0, width, height);
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+
+      texture.userData.wasClampedToGpuLimit = wasClamped;
+      texture.userData.textureSize = { width, height };
+      texture.needsUpdate = true;
+      target.material.map = texture;
+      stabilizeMaterialDepth(target.material);
+      target.material.needsUpdate = true;
+      return texture;
+    }
+
     async function applyMockupByIndex(index, announce = true) {
       if (!model || textureTargets.length === 0) return;
 
-      currentMockupIndex = (index + MOCKUPS.length) % MOCKUPS.length;
-      const mockup = MOCKUPS[currentMockupIndex];
+      const wrappedIndex = (index + MOCKUPS.length) % MOCKUPS.length;
+      const mockup = MOCKUPS[wrappedIndex];
 
       try {
         if (announce) setStatus(`Loading mockup ${mockup.label}`);
         const image = await loadImageFromUrl(mockup.path);
+        currentMockupIndex = wrappedIndex;
         applyTextureImage(image, mockup.path, `Mockup ${mockup.label}`);
       } catch (error) {
         console.error(error);
@@ -962,13 +1071,49 @@
       }
     }
 
+    async function fadeToMockup(index, fromAuto = false) {
+      if (!model || textureTargets.length === 0) return;
+
+      const wrappedIndex = (index + MOCKUPS.length) % MOCKUPS.length;
+      const mockup = MOCKUPS[wrappedIndex];
+      const myToken = ++crossfadeToken;
+
+      try {
+        const nextImage = await loadImageFromUrl(mockup.path);
+        const fromImage = currentMockupImage || nextImage;
+        const started = performance.now();
+
+        function step(now) {
+          if (myToken !== crossfadeToken) return;
+          const t = Math.min(1, (now - started) / MOCKUP_FADE_MS);
+          const eased = t * t * (3 - 2 * t);
+          textureTargets.forEach((target) => drawCompositeTexture(target, fromImage, nextImage, eased));
+          requestRender();
+          if (t < 1) {
+            requestAnimationFrame(step);
+          } else {
+            currentMockupIndex = wrappedIndex;
+            currentMockupImage = nextImage;
+            const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
+            const clamped = textureTargets.some((target) => target.replacementMap?.userData?.wasClampedToGpuLimit);
+            const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
+            if (!fromAuto) setStatus(`Mockup ${mockup.label} applied${qualityNote}${clamped ? ' · GPU limit' : ''}`);
+            requestRender();
+            if (autoCycleActive) scheduleAutoCycleAdvance();
+          }
+        }
+
+        requestAnimationFrame(step);
+      } catch (error) {
+        console.error(error);
+        setStatus(`Could not load ${mockup.path}. Make sure the PNG is inside the 3d folder.`);
+      }
+    }
+
     function applyTextureImage(image, sourceName, statusLabel = 'Mockup') {
+      currentMockupImage = image;
       textureTargets.forEach((target) => {
-        if (target.replacementMap) target.replacementMap.dispose();
-        target.replacementMap = makeExteriorOnlyTexture(target, image);
-        target.material.map = target.replacementMap;
-        stabilizeMaterialDepth(target.material);
-        target.material.needsUpdate = true;
+        drawCompositeTexture(target, image);
       });
 
       const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
@@ -1232,6 +1377,7 @@
 
     controls.addEventListener('start', () => {
       interactionActive = true;
+      noteUserInteraction();
       setInteractiveQuality(true);
       requestRender();
     });
@@ -1260,11 +1406,19 @@
       event.preventDefault();
     }, { passive: false });
 
+    renderer.domElement.addEventListener('pointerdown', noteUserInteraction);
+    renderer.domElement.addEventListener('wheel', noteUserInteraction, { passive: true });
+    renderer.domElement.addEventListener('touchstart', noteUserInteraction, { passive: true });
+
     document.querySelectorAll('[data-view]').forEach((button) => {
-      button.addEventListener('click', () => setView(button.dataset.view));
+      button.addEventListener('click', () => {
+        noteUserInteraction();
+        setView(button.dataset.view);
+      });
     });
 
     rotateBtn.addEventListener('click', () => {
+      noteUserInteraction();
       autoRotateEnabled = !autoRotateEnabled;
       rotateBtn.classList.toggle('active', autoRotateEnabled);
       setInteractiveQuality(autoRotateEnabled);
@@ -1273,6 +1427,7 @@
     });
 
     gridToggleBtn.addEventListener('click', () => {
+      noteUserInteraction();
       gridVisible = !gridVisible;
       if (grid) grid.visible = gridVisible;
       gridToggleBtn.classList.toggle('active', gridVisible);
@@ -1281,15 +1436,24 @@
     });
 
     themeToggle.addEventListener('click', () => {
+      noteUserInteraction();
       applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
       setStatus(currentTheme === 'dark' ? 'Dark mode' : 'Light mode');
     });
 
-    prevMockupBtn.addEventListener('click', () => applyMockupByIndex(currentMockupIndex - 1));
-    nextMockupBtn.addEventListener('click', () => applyMockupByIndex(currentMockupIndex + 1));
-    firstMockupBtn.addEventListener('click', () => applyMockupByIndex(0));
+    prevMockupBtn.addEventListener('click', () => {
+      noteUserInteraction();
+      fadeToMockup(currentMockupIndex - 1, false);
+    });
+    nextMockupBtn.addEventListener('click', () => {
+      noteUserInteraction();
+      fadeToMockup(currentMockupIndex + 1, false);
+    });
 
-    shotBtn.addEventListener('click', takeScreenshot);
+    shotBtn.addEventListener('click', () => {
+      noteUserInteraction();
+      takeScreenshot();
+    });
 
     let dragDepth = 0;
 
