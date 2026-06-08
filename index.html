@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v25: improves mobile vertical framing and makes the bottom control dock compact, centered, and non-cramped across portrait and landscape. -->
+<!-- v26: tightens mobile portrait framing so the object fills more of the vertical display while preserving landscape framing. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -1297,32 +1297,46 @@
       return Math.min(0.2, dockHeight / Math.max(1, height));
     }
 
-    function getFitDistance(multiplier = 1.55) {
+    function getFitDistance(multiplier = 1.55, view = 'hero') {
+      const { width, height } = getViewportSize();
+      const isPortraitMobile = isMobileLike && height >= width;
       const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z, 0.1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
-      const usableHeightRatio = Math.max(0.72, 1 - getMobileDockInsetRatio());
+      const usableHeightRatio = Math.max(isPortraitMobile ? 0.84 : 0.72, 1 - getMobileDockInsetRatio());
       const effectiveVerticalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * usableHeightRatio);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
-      const verticalDistance = maxDim / (2 * Math.tan(effectiveVerticalFov / 2));
-      const horizontalDistance = maxDim / (2 * Math.tan(horizontalFov / 2));
-      return Math.max(verticalDistance, horizontalDistance, modelRadius * 1.55) * multiplier;
+
+      // In portrait, using the model height as the horizontal fit size makes this tall,
+      // narrow case look unnecessarily tiny. Use a view-aware horizontal footprint instead.
+      const verticalFitSize = isPortraitMobile ? modelSize.y : maxDim;
+      const horizontalFootprint = Math.max(modelSize.x, modelSize.z, 0.1);
+      const portraitHeroWidth = horizontalFootprint * 1.52;
+      const portraitStraightWidth = horizontalFootprint * 1.18;
+      const horizontalFitSize = isPortraitMobile
+        ? (view === 'hero' ? portraitHeroWidth : portraitStraightWidth)
+        : maxDim;
+
+      const verticalDistance = verticalFitSize / (2 * Math.tan(effectiveVerticalFov / 2));
+      const horizontalDistance = horizontalFitSize / (2 * Math.tan(horizontalFov / 2));
+      const minimumDistance = isPortraitMobile ? modelRadius * 0.86 : modelRadius * 1.55;
+      return Math.max(verticalDistance, horizontalDistance, minimumDistance) * multiplier;
     }
 
     function getViewFitMultiplier() {
       if (!isMobileLike) return 1.52;
       const { width, height } = getViewportSize();
-      return height >= width ? 1.38 : 1.48;
+      return height >= width ? 1.04 : 1.48;
     }
 
     function setView(view, smooth = true) {
-      const fit = getFitDistance(getViewFitMultiplier());
+      const fit = getFitDistance(getViewFitMultiplier(), view);
       const { width, height } = getViewportSize();
       const isPortraitMobile = isMobileLike && height >= width;
-      const heroDirection = new THREE.Vector3(1.12, isPortraitMobile ? 0.34 : 0.40, 1.32).normalize();
+      const heroDirection = new THREE.Vector3(1.12, isPortraitMobile ? 0.28 : 0.40, 1.32).normalize();
       const positions = {
-        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * (isPortraitMobile ? 1.0 : 1.06))),
-        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * (isPortraitMobile ? 0.98 : 1.04))),
-        side: orbitTarget.clone().add(new THREE.Vector3(fit * (isPortraitMobile ? 0.98 : 1.04), 0, 0.001)),
+        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * (isPortraitMobile ? 0.92 : 1.06))),
+        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * (isPortraitMobile ? 0.92 : 1.04))),
+        side: orbitTarget.clone().add(new THREE.Vector3(fit * (isPortraitMobile ? 0.92 : 1.04), 0, 0.001)),
       };
 
       const targetPosition = positions[view] || positions.hero;
