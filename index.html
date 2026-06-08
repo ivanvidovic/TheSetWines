@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v28: moves the mobile portrait camera back by about 6% more so the object clears the bottom button dock on load. -->
+<!-- v37: uses the standard Lucide rotate-cw icon for the Rotate control. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -94,6 +94,19 @@
     }
 
     canvas:active { cursor: grabbing; }
+
+    .transition-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      width: 100vw;
+      height: var(--app-height);
+      pointer-events: none;
+      cursor: default;
+      opacity: 0;
+      will-change: opacity;
+      transform: translateZ(0);
+    }
 
     .topbar {
       /* Hidden visual status layer. Status text is kept only for internal updates/accessibility,
@@ -383,7 +396,7 @@
         bottom: calc(8px + var(--safe-bottom));
         width: max-content;
         max-width: calc(100vw - 14px - var(--safe-left) - var(--safe-right));
-        height: 54px;
+        height: 62px;
         transform: translateX(-50%);
         justify-content: center;
         align-items: center;
@@ -404,7 +417,13 @@
       }
 
       .control-label {
-        display: none;
+        display: block;
+        font-size: 10px;
+        line-height: 1;
+        letter-spacing: 0;
+        max-width: 46px;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       button,
@@ -433,7 +452,7 @@
 
     @media (max-width: 430px) {
       .controls {
-        height: 48px;
+        height: 56px;
         bottom: calc(6px + var(--safe-bottom));
         padding: 5px;
         gap: 2px;
@@ -465,7 +484,7 @@
         max-width: calc(100vw - 18px - var(--safe-left) - var(--safe-right));
         transform: translateX(-50%);
         justify-content: center;
-        height: 48px;
+        height: 56px;
         padding: 5px 6px;
         gap: 4px;
       }
@@ -502,7 +521,7 @@
 
   <!-- Icons are inline SVGs using Lucide-style open-source line icon shapes. -->
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
-    <symbol id="i-hero" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></symbol>
+    <symbol id="i-view" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/><circle cx="7" cy="10" r="1.4"/><circle cx="11.5" cy="10" r="1.4"/></symbol>
     <symbol id="i-front" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 17h8"/></symbol>
     <symbol id="i-side" viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z"/><path d="M15 4v4h4"/><path d="M9 8h3"/><path d="M9 16h6"/></symbol>
     <symbol id="i-top" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 10l7-7 7 7"/><path d="M5 14l7 7 7-7"/></symbol>
@@ -510,7 +529,7 @@
     <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></symbol>
     <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/><path d="M20 18l-6-6 6-6"/></symbol>
     <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/><path d="M4 18l6-6-6-6"/></symbol>
-    <symbol id="i-spin" viewBox="0 0 24 24"><path d="M4 12a8 4 0 1 0 16 0 8 4 0 1 0-16 0"/><path d="M12 4a4 8 0 1 0 0 16 4 8 0 1 0 0-16"/><path d="M4 12h16"/></symbol>
+    <symbol id="i-rotate-plane" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M21 13a9 9 0 1 1-3-6.7L21 8"/></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a7 7 0 1 0 11 11z"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.93 19.07l1.41-1.41"/><path d="M17.66 6.34l1.41-1.41"/></symbol>
@@ -518,13 +537,11 @@
   </svg>
 
   <div class="controls" aria-label="Preview controls">
-    <div class="control-item"><button type="button" data-view="hero" class="active" aria-label="Hero view" title="Hero view"><svg class="icon"><use href="#i-hero"></use></svg><span class="sr-only">Hero view</span></button><span class="control-label">Hero</span></div>
-    <div class="control-item"><button type="button" data-view="front" aria-label="Front view" title="Front view"><svg class="icon"><use href="#i-front"></use></svg><span class="sr-only">Front view</span></button><span class="control-label">Front</span></div>
-    <div class="control-item"><button type="button" data-view="side" aria-label="Side view" title="Side view"><svg class="icon"><use href="#i-side"></use></svg><span class="sr-only">Side view</span></button><span class="control-label">Side</span></div>
+    <div class="control-item"><button type="button" id="viewCycleBtn" aria-label="Change view" title="Change view"><svg class="icon"><use href="#i-view"></use></svg><span class="sr-only">Change view</span></button><span class="control-label" id="viewCycleLabel">View</span></div>
     <span class="divider" aria-hidden="true"></span>
     <div class="control-item"><button type="button" id="prevMockupBtn" aria-label="Previous mockup" title="Previous mockup"><svg class="icon"><use href="#i-prev"></use></svg><span class="sr-only">Previous mockup</span></button><span class="control-label">Prev</span></div>
     <div class="control-item"><button type="button" id="nextMockupBtn" aria-label="Next mockup" title="Next mockup"><svg class="icon"><use href="#i-next"></use></svg><span class="sr-only">Next mockup</span></button><span class="control-label">Next</span></div>
-    <div class="control-item"><button type="button" id="rotateBtn" aria-label="Toggle auto rotate" title="Toggle spin"><svg class="icon"><use href="#i-spin"></use></svg><span class="sr-only">Toggle spin</span></button><span class="control-label">Spin</span></div>
+    <div class="control-item"><button type="button" id="rotateBtn" aria-label="Toggle auto-rotate" title="Toggle auto-rotate"><svg class="icon"><use href="#i-rotate-plane"></use></svg><span class="sr-only">Toggle auto-rotate</span></button><span class="control-label">Rotate</span></div>
     <div class="control-item"><button type="button" id="gridToggleBtn" class="active" aria-label="Toggle grid" title="Toggle grid"><svg class="icon"><use href="#i-grid"></use></svg><span class="sr-only">Toggle grid</span></button><span class="control-label">Grid</span></div>
     <div class="control-item"><button type="button" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme"><svg class="icon icon-moon"><use href="#i-moon"></use></svg><svg class="icon icon-sun"><use href="#i-sun"></use></svg><span class="sr-only">Toggle theme</span></button><span class="control-label">Dark</span></div>
     <div class="control-item"><button type="button" id="shotBtn" aria-label="Save screenshot" title="Save screenshot"><svg class="icon"><use href="#i-camera"></use></svg><span class="sr-only">Save screenshot</span></button><span class="control-label">Save</span></div>
@@ -578,6 +595,8 @@
     const statusText = document.getElementById('statusText');
     const dropZone = document.getElementById('dropZone');
     const themeToggle = document.getElementById('themeToggle');
+    const viewCycleBtn = document.getElementById('viewCycleBtn');
+    const viewCycleLabel = document.getElementById('viewCycleLabel');
     const prevMockupBtn = document.getElementById('prevMockupBtn');
     const nextMockupBtn = document.getElementById('nextMockupBtn');
     const rotateBtn = document.getElementById('rotateBtn');
@@ -589,10 +608,17 @@
     let modelRadius = 1;
     let orbitTarget = new THREE.Vector3(0, 0, 0);
     let autoRotateEnabled = false;
+    const VIEW_SEQUENCE = ['hero', 'front', 'side'];
+    let currentView = 'hero';
     let currentTheme = 'light';
     let textureTargets = [];
     let currentMockupIndex = 0;
     let currentMockupImage = null;
+    let mockupImageCache = new Map();
+    let mockupTextureCache = new Map();
+    let transitionCanvas = null;
+    let transitionCtx = null;
+    let transitionCleanupTimer = null;
     let idleStartTimer = null;
     let autoCycleTimer = null;
     let autoCycleActive = false;
@@ -640,6 +666,11 @@
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     stage.appendChild(renderer.domElement);
+
+    transitionCanvas = document.createElement('canvas');
+    transitionCanvas.className = 'transition-canvas';
+    transitionCtx = transitionCanvas.getContext('2d', { alpha: true });
+    stage.appendChild(transitionCanvas);
 
     const viewport = getViewportSize();
     const camera = new THREE.PerspectiveCamera(34, viewport.width / viewport.height, 0.01, 1000);
@@ -723,6 +754,11 @@
       const { width, height } = getViewportSize();
       document.documentElement.style.setProperty('--app-height', `${height}px`);
       renderer.setSize(width, height, false);
+
+      if (transitionCanvas && renderer.domElement) {
+        transitionCanvas.width = renderer.domElement.width || Math.round(width * (activePixelRatio || window.devicePixelRatio || 1));
+        transitionCanvas.height = renderer.domElement.height || Math.round(height * (activePixelRatio || window.devicePixelRatio || 1));
+      }
     }
 
     function updateCameraAspect() {
@@ -797,6 +833,10 @@
 
           model = gltf.scene;
           textureTargets = [];
+          mockupTextureCache.forEach((maps) => maps.forEach((texture) => texture?.dispose?.()));
+          mockupTextureCache.clear();
+          mockupImageCache.clear();
+          currentMockupImage = null;
 
           model.traverse((child) => {
             if (!child.isMesh) return;
@@ -823,7 +863,7 @@
           normalizeModel(model);
           updateStageHelpers();
           setView('hero', false);
-          applyMockupByIndex(0, false);
+          applyMockupByIndex(0, false).then(() => warmMockupCache(0));
           startIdleCountdown();
           hideLoader();
           requestRender();
@@ -990,12 +1030,115 @@
     }
 
     function loadImageFromUrl(url) {
+      if (mockupImageCache.has(url)) return Promise.resolve(mockupImageCache.get(url));
+
       return new Promise((resolve, reject) => {
         const image = new Image();
-        image.onload = () => resolve(image);
+        image.decoding = 'async';
+        image.onload = async () => {
+          try {
+            if (image.decode) await image.decode();
+          } catch (error) {
+            // Some browsers throw here even though the image is usable.
+          }
+          mockupImageCache.set(url, image);
+          resolve(image);
+        };
         image.onerror = () => reject(new Error(`Could not load ${url}`));
         image.src = url;
       });
+    }
+
+    async function getMockupTextures(index) {
+      const wrappedIndex = (index + MOCKUPS.length) % MOCKUPS.length;
+      if (mockupTextureCache.has(wrappedIndex)) {
+        return mockupTextureCache.get(wrappedIndex);
+      }
+
+      const mockup = MOCKUPS[wrappedIndex];
+      const image = await loadImageFromUrl(mockup.path);
+      const maps = textureTargets.map((target) => makeExteriorOnlyTexture(target, image));
+      mockupTextureCache.set(wrappedIndex, maps);
+      return maps;
+    }
+
+    function warmMockupCache(activeIndex = 0) {
+      MOCKUPS.forEach((_, index) => {
+        if (index === activeIndex) return;
+        window.setTimeout(() => {
+          getMockupTextures(index).catch((error) => console.warn(error));
+        }, 180 + index * 160);
+      });
+    }
+
+    function applyMockupTextures(index, maps, statusLabel = 'Mockup', showStatus = true) {
+      currentMockupIndex = (index + MOCKUPS.length) % MOCKUPS.length;
+      currentMockupImage = mockupImageCache.get(MOCKUPS[currentMockupIndex].path) || currentMockupImage;
+
+      textureTargets.forEach((target, targetIndex) => {
+        target.material.map = maps[targetIndex];
+        target.replacementMap = maps[targetIndex];
+        stabilizeMaterialDepth(target.material);
+        target.material.needsUpdate = true;
+      });
+
+      if (showStatus) {
+        const size = maps[0]?.userData?.textureSize;
+        const clamped = maps.some((texture) => texture?.userData?.wasClampedToGpuLimit);
+        const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
+        setStatus(`${statusLabel} applied${qualityNote}${clamped ? ' · GPU limit' : ''}`);
+      }
+
+      requestRender();
+    }
+
+    function snapshotCurrentFrameForTransition() {
+      if (!transitionCanvas || !transitionCtx) return;
+
+      renderer.render(scene, camera);
+      transitionCanvas.width = renderer.domElement.width;
+      transitionCanvas.height = renderer.domElement.height;
+      transitionCtx.clearRect(0, 0, transitionCanvas.width, transitionCanvas.height);
+      transitionCtx.drawImage(renderer.domElement, 0, 0, transitionCanvas.width, transitionCanvas.height);
+
+      if (transitionCleanupTimer) {
+        window.clearTimeout(transitionCleanupTimer);
+        transitionCleanupTimer = null;
+      }
+
+      transitionCanvas.style.transition = 'none';
+      transitionCanvas.style.opacity = '1';
+    }
+
+    function fadeOutTransitionOverlay(callback) {
+      if (!transitionCanvas) {
+        callback?.();
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        transitionCanvas.style.transition = `opacity ${MOCKUP_FADE_MS}ms ease`;
+        transitionCanvas.style.opacity = '0';
+
+        transitionCleanupTimer = window.setTimeout(() => {
+          transitionCtx?.clearRect(0, 0, transitionCanvas.width, transitionCanvas.height);
+          transitionCleanupTimer = null;
+          callback?.();
+        }, MOCKUP_FADE_MS + 60);
+      });
+    }
+
+    function cancelTransitionOverlay() {
+      if (transitionCleanupTimer) {
+        window.clearTimeout(transitionCleanupTimer);
+        transitionCleanupTimer = null;
+      }
+
+      if (transitionCanvas && transitionCtx) {
+        transitionCanvas.style.transition = 'none';
+        transitionCanvas.style.opacity = '0';
+        transitionCtx.clearRect(0, 0, transitionCanvas.width, transitionCanvas.height);
+      }
     }
 
     function clearAutoCycleTimers() {
@@ -1029,6 +1172,7 @@
     function noteUserInteraction() {
       autoCycleActive = false;
       crossfadeToken += 1;
+      cancelTransitionOverlay();
       clearAutoCycleTimers();
       startIdleCountdown();
     }
@@ -1099,9 +1243,8 @@
 
       try {
         if (announce) setStatus(`Loading mockup ${mockup.label}`);
-        const image = await loadImageFromUrl(mockup.path);
-        currentMockupIndex = wrappedIndex;
-        applyTextureImage(image, mockup.path, `Mockup ${mockup.label}`);
+        const maps = await getMockupTextures(wrappedIndex);
+        applyMockupTextures(wrappedIndex, maps, `Mockup ${mockup.label}`, announce);
       } catch (error) {
         console.error(error);
         setStatus(`Could not load ${mockup.path}. Make sure the PNG is inside the 3d folder.`);
@@ -1116,31 +1259,16 @@
       const myToken = ++crossfadeToken;
 
       try {
-        const nextImage = await loadImageFromUrl(mockup.path);
-        const fromImage = currentMockupImage || nextImage;
-        const started = performance.now();
+        const maps = await getMockupTextures(wrappedIndex);
+        if (myToken !== crossfadeToken) return;
 
-        function step(now) {
-          if (myToken !== crossfadeToken) return;
-          const t = Math.min(1, (now - started) / MOCKUP_FADE_MS);
-          const eased = t * t * (3 - 2 * t);
-          textureTargets.forEach((target) => drawCompositeTexture(target, fromImage, nextImage, eased));
-          requestRender();
-          if (t < 1) {
-            requestAnimationFrame(step);
-          } else {
-            currentMockupIndex = wrappedIndex;
-            currentMockupImage = nextImage;
-            const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
-            const clamped = textureTargets.some((target) => target.replacementMap?.userData?.wasClampedToGpuLimit);
-            const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
-            if (!fromAuto) setStatus(`Mockup ${mockup.label} applied${qualityNote}${clamped ? ' · GPU limit' : ''}`);
-            requestRender();
-            if (autoCycleActive) scheduleAutoCycleAdvance();
+        snapshotCurrentFrameForTransition();
+        applyMockupTextures(wrappedIndex, maps, `Mockup ${mockup.label}`, !fromAuto);
+        fadeOutTransitionOverlay(() => {
+          if (myToken === crossfadeToken && autoCycleActive) {
+            scheduleAutoCycleAdvance();
           }
-        }
-
-        requestAnimationFrame(step);
+        });
       } catch (error) {
         console.error(error);
         setStatus(`Could not load ${mockup.path}. Make sure the PNG is inside the 3d folder.`);
@@ -1148,9 +1276,15 @@
     }
 
     function applyTextureImage(image, sourceName, statusLabel = 'Mockup') {
-      currentMockupImage = image;
+      // Kept for compatibility with any manual drag/drop fallback. Normal mockup cycling
+      // uses cached texture maps above so arrows and autoplay feel immediate.
       textureTargets.forEach((target) => {
-        drawCompositeTexture(target, image);
+        if (target.manualReplacementMap) target.manualReplacementMap.dispose();
+        target.manualReplacementMap = makeExteriorOnlyTexture(target, image);
+        target.material.map = target.manualReplacementMap;
+        target.replacementMap = target.manualReplacementMap;
+        stabilizeMaterialDepth(target.material);
+        target.material.needsUpdate = true;
       });
 
       const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
@@ -1383,9 +1517,19 @@
     }
 
     function updateActiveView(view) {
-      document.querySelectorAll('[data-view]').forEach((button) => {
-        button.classList.toggle('active', button.dataset.view === view);
-      });
+      currentView = view;
+      const label = view === 'hero' ? 'Hero' : view.charAt(0).toUpperCase() + view.slice(1);
+      if (viewCycleLabel) viewCycleLabel.textContent = label;
+      if (viewCycleBtn) {
+        viewCycleBtn.setAttribute('aria-label', `Change view. Current: ${label}`);
+        viewCycleBtn.setAttribute('title', `Current view: ${label}`);
+      }
+    }
+
+    function cycleView() {
+      const currentIndex = VIEW_SEQUENCE.indexOf(currentView);
+      const nextView = VIEW_SEQUENCE[(currentIndex + 1) % VIEW_SEQUENCE.length];
+      setView(nextView);
     }
 
     function applyTheme(theme) {
@@ -1462,8 +1606,7 @@
       syncViewportSize();
       updateCameraAspect();
       setRenderPixelRatio(interactionActive ? getInteractionPixelRatio() : getIdlePixelRatio());
-      const activeViewButton = document.querySelector('[data-view].active');
-      if (model && activeViewButton) setView(activeViewButton.dataset.view, false);
+      if (model) setView(currentView, false);
       requestRender();
     }
 
@@ -1480,11 +1623,9 @@
     renderer.domElement.addEventListener('wheel', noteUserInteraction, { passive: true });
     renderer.domElement.addEventListener('touchstart', noteUserInteraction, { passive: true });
 
-    document.querySelectorAll('[data-view]').forEach((button) => {
-      button.addEventListener('click', () => {
-        noteUserInteraction();
-        setView(button.dataset.view);
-      });
+    viewCycleBtn.addEventListener('click', () => {
+      noteUserInteraction();
+      cycleView();
     });
 
     rotateBtn.addEventListener('click', () => {
