@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- v10: pulled-back load camera and compact icon-only bottom dock. Keeps full-quality texture rendering and untouched GLB geometry. -->
+<!-- v22: mockup cycler. Auto-loads the first PNG mockup and cycles only through mockup files, not the embedded GLB artwork. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>Wine Case Wrap Preview · Icon Controls</title>
+  <title>Wine Case Wrap Preview</title>
   <meta name="description" content="Full-resolution GLB preview for a wine case wrap mockup with exterior-only texture swapping." />
   <style>
     :root {
@@ -96,35 +96,104 @@
     canvas:active { cursor: grabbing; }
 
     .topbar {
+      /* Hidden visual status layer. Status text is kept only for internal updates/accessibility,
+         so the desktop UI stays clean with no top-left title or texture filename labels. */
       position: fixed;
-      top: calc(18px + var(--safe-top));
-      left: calc(18px + var(--safe-left));
-      right: calc(18px + var(--safe-right));
-      z-index: 4;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
       pointer-events: none;
     }
 
     .title,
     .status,
     .controls {
+      pointer-events: auto;
+      border: 1px solid var(--line);
+      background: var(--glass);
+      box-shadow: 0 12px 34px var(--shadow);
+      backdrop-filter: blur(18px) saturate(1.15);
+      -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    }
+
+    .title {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 13px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .title strong,
+    .status strong {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .status {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-width: min(52vw, 560px);
+      padding: 8px 13px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .controls {
       position: fixed;
       left: 50%;
       bottom: calc(14px + var(--safe-bottom));
       z-index: 4;
       display: flex;
-      align-items: center;
+      align-items: flex-end;
       justify-content: center;
-      gap: 5px;
+      gap: 6px;
       max-width: calc(100vw - 28px - var(--safe-left) - var(--safe-right));
-      padding: 6px;
-      border-radius: var(--radius);
+      padding: 8px 10px 10px;
+      border-radius: 28px;
       transform: translateX(-50%);
-      backdrop-filter: blur(18px) saturate(1.15);
-      -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    }
+
+    .control-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 5px;
+      flex: 0 0 auto;
+      min-width: 42px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      line-height: 1;
+      letter-spacing: 0.01em;
+      color: var(--muted);
+      white-space: nowrap;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     button,
@@ -306,15 +375,6 @@
         align-items: flex-start;
       }
 
-      .title { display: none; }
-
-      .status {
-        max-width: none;
-        width: 100%;
-        min-height: 34px;
-        padding: 8px 12px;
-        font-size: 11px;
-      }
 
       .controls {
         left: calc(8px + var(--safe-left));
@@ -325,6 +385,7 @@
         height: 54px;
         transform: none;
         justify-content: flex-start;
+        align-items: center;
         gap: 4px;
         padding: 6px;
         overflow-x: auto;
@@ -335,6 +396,15 @@
       }
 
       .controls::-webkit-scrollbar { display: none; }
+
+      .control-item {
+        gap: 0;
+        min-width: 40px;
+      }
+
+      .control-label {
+        display: none;
+      }
 
       button,
       .file-button {
@@ -361,13 +431,15 @@
     }
 
     @media (max-width: 430px) {
-      .status { display: none; }
-
       .controls {
         height: 50px;
         bottom: calc(6px + var(--safe-bottom));
         padding: 5px;
         gap: 3px;
+      }
+
+      .control-item {
+        min-width: 38px;
       }
 
       button,
@@ -387,8 +459,7 @@
 <body>
   <div id="stage" aria-label="3D wine case wrap preview"></div>
 
-  <div class="topbar">
-    <div class="title"><span class="dot"></span><strong>Case Wrap</strong><span>3D Preview</span></div>
+  <div class="topbar" aria-live="polite">
     <div class="status" id="statusText">Loading model</div>
   </div>
 
@@ -400,23 +471,28 @@
     <symbol id="i-top" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 10l7-7 7 7"/><path d="M5 14l7 7 7-7"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
     <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/><path d="M20 18l-6-6 6-6"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/><path d="M4 18l6-6-6-6"/></symbol>
     <symbol id="i-spin" viewBox="0 0 24 24"><path d="M4 12a8 4 0 1 0 16 0 8 4 0 1 0-16 0"/><path d="M12 4a4 8 0 1 0 0 16 4 8 0 1 0 0-16"/><path d="M4 12h16"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a7 7 0 1 0 11 11z"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.93 19.07l1.41-1.41"/><path d="M17.66 6.34l1.41-1.41"/></symbol>
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4l1.5 3H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l1.5-3z"/><circle cx="12" cy="13" r="4"/></symbol>
   </svg>
 
   <div class="controls" aria-label="Preview controls">
-    <button type="button" data-view="hero" class="active" aria-label="Hero view" title="Hero view"><svg class="icon"><use href="#i-hero"></use></svg><span class="sr-only">Hero view</span></button>
-    <button type="button" data-view="front" aria-label="Front view" title="Front view"><svg class="icon"><use href="#i-front"></use></svg><span class="sr-only">Front view</span></button>
-    <button type="button" data-view="side" aria-label="Side view" title="Side view"><svg class="icon"><use href="#i-side"></use></svg><span class="sr-only">Side view</span></button>
-    <button type="button" data-view="top" aria-label="Top view" title="Top view"><svg class="icon"><use href="#i-top"></use></svg><span class="sr-only">Top view</span></button>
+    <div class="control-item"><button type="button" data-view="hero" class="active" aria-label="Hero view" title="Hero view"><svg class="icon"><use href="#i-hero"></use></svg><span class="sr-only">Hero view</span></button><span class="control-label">Hero</span></div>
+    <div class="control-item"><button type="button" data-view="front" aria-label="Front view" title="Front view"><svg class="icon"><use href="#i-front"></use></svg><span class="sr-only">Front view</span></button><span class="control-label">Front</span></div>
+    <div class="control-item"><button type="button" data-view="side" aria-label="Side view" title="Side view"><svg class="icon"><use href="#i-side"></use></svg><span class="sr-only">Side view</span></button><span class="control-label">Side</span></div>
     <span class="divider" aria-hidden="true"></span>
-    <label class="file-button" aria-label="Upload texture" title="Upload texture"><svg class="icon"><use href="#i-upload"></use></svg><span class="sr-only">Upload texture</span><input id="textureInput" type="file" accept="image/png,image/jpeg,image/webp,image/avif" /></label>
-    <button type="button" id="resetTextureBtn" aria-label="Reset original texture" title="Reset texture"><svg class="icon"><use href="#i-reset"></use></svg><span class="sr-only">Reset texture</span></button>
-    <button type="button" id="rotateBtn" aria-label="Toggle auto rotate" title="Toggle spin"><svg class="icon"><use href="#i-spin"></use></svg><span class="sr-only">Toggle spin</span></button>
-    <button type="button" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme"><svg class="icon icon-moon"><use href="#i-moon"></use></svg><svg class="icon icon-sun"><use href="#i-sun"></use></svg><span class="sr-only">Toggle theme</span></button>
-    <button type="button" id="shotBtn" aria-label="Save screenshot" title="Save screenshot"><svg class="icon"><use href="#i-camera"></use></svg><span class="sr-only">Save screenshot</span></button>
+    <div class="control-item"><button type="button" id="prevMockupBtn" aria-label="Previous mockup" title="Previous mockup"><svg class="icon"><use href="#i-prev"></use></svg><span class="sr-only">Previous mockup</span></button><span class="control-label">Prev</span></div>
+    <div class="control-item"><button type="button" id="nextMockupBtn" aria-label="Next mockup" title="Next mockup"><svg class="icon"><use href="#i-next"></use></svg><span class="sr-only">Next mockup</span></button><span class="control-label">Next</span></div>
+    <div class="control-item"><button type="button" id="firstMockupBtn" aria-label="First mockup" title="First mockup"><svg class="icon"><use href="#i-reset"></use></svg><span class="sr-only">First mockup</span></button><span class="control-label">First</span></div>
+    <div class="control-item"><button type="button" id="rotateBtn" aria-label="Toggle auto rotate" title="Toggle spin"><svg class="icon"><use href="#i-spin"></use></svg><span class="sr-only">Toggle spin</span></button><span class="control-label">Spin</span></div>
+    <div class="control-item"><button type="button" id="gridToggleBtn" class="active" aria-label="Toggle grid" title="Toggle grid"><svg class="icon"><use href="#i-grid"></use></svg><span class="sr-only">Toggle grid</span></button><span class="control-label">Grid</span></div>
+    <div class="control-item"><button type="button" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme"><svg class="icon icon-moon"><use href="#i-moon"></use></svg><svg class="icon icon-sun"><use href="#i-sun"></use></svg><span class="sr-only">Toggle theme</span></button><span class="control-label">Dark</span></div>
+    <div class="control-item"><button type="button" id="shotBtn" aria-label="Save screenshot" title="Save screenshot"><svg class="icon"><use href="#i-camera"></use></svg><span class="sr-only">Save screenshot</span></button><span class="control-label">Save</span></div>
+  </div>
   </div>
 
   <div id="loader">
@@ -428,8 +504,8 @@
 
   <div id="dropZone">
     <div class="drop-card">
-      <strong>Drop texture to replace exterior artwork only</strong>
-      <span>Geometry, groups, normals, and draw order are untouched. Interior and edge atlas regions remain black.</span>
+      <strong>Mockup cycle</strong>
+      <span>Use Prev / Next to cycle through the PNG mockups in the 3d folder.</span>
     </div>
   </div>
 
@@ -450,6 +526,15 @@
 
     const MODEL_PATH = './3d/Case_Wrap_01.glb';
 
+    const MOCKUPS = [
+      { label: 'A 01', path: './3d/The_Set_Case_Wrap_A_01.png' },
+      { label: 'A 02', path: './3d/The_Set_Case_Wrap_A_02.png' },
+      { label: 'A 03', path: './3d/The_Set_Case_Wrap_A_03.png' },
+      { label: 'B 01', path: './3d/The_Set_Case_Wrap_B_01.png' },
+      { label: 'B 02', path: './3d/The_Set_Case_Wrap_B_02.png' },
+      { label: 'B 03', path: './3d/The_Set_Case_Wrap_B_03.png' }
+    ];
+
     const stage = document.getElementById('stage');
     const loaderEl = document.getElementById('loader');
     const loaderText = document.getElementById('loaderText');
@@ -457,17 +542,21 @@
     const statusText = document.getElementById('statusText');
     const dropZone = document.getElementById('dropZone');
     const themeToggle = document.getElementById('themeToggle');
-    const textureInput = document.getElementById('textureInput');
-    const resetTextureBtn = document.getElementById('resetTextureBtn');
+    const prevMockupBtn = document.getElementById('prevMockupBtn');
+    const nextMockupBtn = document.getElementById('nextMockupBtn');
+    const firstMockupBtn = document.getElementById('firstMockupBtn');
     const rotateBtn = document.getElementById('rotateBtn');
+    const gridToggleBtn = document.getElementById('gridToggleBtn');
     const shotBtn = document.getElementById('shotBtn');
 
     let model = null;
     let modelSize = new THREE.Vector3(1, 1, 1);
     let modelRadius = 1;
+    let orbitTarget = new THREE.Vector3(0, 0, 0);
     let autoRotateEnabled = false;
     let currentTheme = 'light';
     let textureTargets = [];
+    let currentMockupIndex = 0;
     let activePixelRatio = 0;
     let renderLoopRunning = false;
     let interactionActive = false;
@@ -504,9 +593,9 @@
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = 0.94;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     stage.appendChild(renderer.domElement);
 
     const viewport = getViewportSize();
@@ -517,9 +606,9 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.065;
     controls.autoRotateSpeed = 0.8;
-    controls.target.set(0, 0, 0);
+    controls.target.copy(orbitTarget);
     controls.screenSpacePanning = false;
-    controls.enablePan = !isMobileLike;
+    controls.enablePan = false;
     controls.rotateSpeed = isMobileLike ? 0.82 : 1.0;
     controls.zoomSpeed = isMobileLike ? 0.72 : 1.0;
     controls.touches = {
@@ -533,36 +622,45 @@
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xefe3d0, 1.45);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xefe3d0, 1.08);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.65);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
     keyLight.position.set(3.5, 4.5, 4.0);
+    scene.add(keyLight.target);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(isMobileLike ? 512 : 1024, isMobileLike ? 512 : 1024);
+    keyLight.shadow.mapSize.set(isMobileLike ? 1024 : 2048, isMobileLike ? 1024 : 2048);
     keyLight.shadow.camera.near = 0.01;
     keyLight.shadow.camera.far = 24;
+    keyLight.shadow.radius = isMobileLike ? 4.8 : 6.0;
+    if ('blurSamples' in keyLight.shadow) keyLight.shadow.blurSamples = isMobileLike ? 8 : 12;
+    // Avoid shadow acne / tessellation-looking artifacts on shallow grazing angles.
+    // The model casts a shadow onto the floor, but does not receive its own shadow.
+    keyLight.shadow.bias = -0.00002;
+    keyLight.shadow.normalBias = 0.018;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xfff1d4, 1.05);
+    const fillLight = new THREE.DirectionalLight(0xfff1d4, 0.62);
     fillLight.position.set(-4, 2, -3);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xd9e2ff, 0.76);
+    const rimLight = new THREE.DirectionalLight(0xd9e2ff, 0.42);
     rimLight.position.set(-2, 4, 5);
     scene.add(rimLight);
 
     const shadowPlane = new THREE.Mesh(
       new THREE.CircleGeometry(1, 96),
-      new THREE.ShadowMaterial({ opacity: 0.14 })
+      new THREE.ShadowMaterial({ opacity: 0.10 })
     );
     shadowPlane.rotation.x = -Math.PI / 2;
     shadowPlane.receiveShadow = true;
     scene.add(shadowPlane);
 
+    let gridVisible = true;
     let grid = new THREE.GridHelper(2, isMobileLike ? 10 : 16, 0x6d583d, 0x6d583d);
     grid.material.transparent = true;
     grid.material.opacity = 0.09;
+    grid.visible = gridVisible;
     scene.add(grid);
 
     const gltfLoader = new GLTFLoader();
@@ -660,13 +758,18 @@
           model.traverse((child) => {
             if (!child.isMesh) return;
             child.castShadow = true;
-            child.receiveShadow = true;
+            // Do not let the folded wrap receive shadows on itself. Self-shadowing on
+            // the case faces causes shadow acne that looks like triangular tessellation
+            // over the print when the light hits at glancing angles.
+            child.receiveShadow = false;
 
             // Keep the mesh exactly as authored. No geometry mutation.
             const materials = Array.isArray(child.material) ? child.material : [child.material];
             materials.forEach((mat) => {
               if (!mat) return;
-              mat.envMapIntensity = 1.0;
+              mat.envMapIntensity = 0.42;
+              if (typeof mat.roughness === 'number') mat.roughness = Math.max(mat.roughness, 0.72);
+              if (typeof mat.metalness === 'number') mat.metalness = Math.min(mat.metalness, 0.0);
               stabilizeMaterialDepth(mat);
               prepareTextureTarget(child, mat, Array.isArray(child.material) ? child.material.indexOf(mat) : 0);
             });
@@ -677,8 +780,8 @@
           normalizeModel(model);
           updateStageHelpers();
           setView('hero', false);
+          applyMockupByIndex(0, false);
           hideLoader();
-          setStatus(isMobileLike ? `${label} loaded · Tap Texture to replace exterior artwork` : `${label} loaded · Drop an image to replace exterior artwork only`);
           requestRender();
         },
         (event) => {
@@ -834,6 +937,47 @@
       });
     }
 
+    function loadImageFromUrl(url) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error(`Could not load ${url}`));
+        image.src = url;
+      });
+    }
+
+    async function applyMockupByIndex(index, announce = true) {
+      if (!model || textureTargets.length === 0) return;
+
+      currentMockupIndex = (index + MOCKUPS.length) % MOCKUPS.length;
+      const mockup = MOCKUPS[currentMockupIndex];
+
+      try {
+        if (announce) setStatus(`Loading mockup ${mockup.label}`);
+        const image = await loadImageFromUrl(mockup.path);
+        applyTextureImage(image, mockup.path, `Mockup ${mockup.label}`);
+      } catch (error) {
+        console.error(error);
+        setStatus(`Could not load ${mockup.path}. Make sure the PNG is inside the 3d folder.`);
+      }
+    }
+
+    function applyTextureImage(image, sourceName, statusLabel = 'Mockup') {
+      textureTargets.forEach((target) => {
+        if (target.replacementMap) target.replacementMap.dispose();
+        target.replacementMap = makeExteriorOnlyTexture(target, image);
+        target.material.map = target.replacementMap;
+        stabilizeMaterialDepth(target.material);
+        target.material.needsUpdate = true;
+      });
+
+      const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
+      const clamped = textureTargets.some((target) => target.replacementMap?.userData?.wasClampedToGpuLimit);
+      const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
+      setStatus(`${statusLabel} applied${qualityNote}${clamped ? ' · GPU limit' : ''}`);
+      requestRender();
+    }
+
     function makeExteriorOnlyTexture(target, uploadedImage) {
       const { width, height, wasClamped } = getCompositeTextureSize(target.originalImage, uploadedImage);
       const canvas = document.createElement('canvas');
@@ -890,40 +1034,11 @@
       try {
         setStatus(`Applying exterior texture: ${file.name}`);
         const uploadedImage = await loadImageFromFile(file);
-
-        textureTargets.forEach((target) => {
-          if (target.replacementMap) target.replacementMap.dispose();
-          target.replacementMap = makeExteriorOnlyTexture(target, uploadedImage);
-          target.material.map = target.replacementMap;
-          stabilizeMaterialDepth(target.material);
-          target.material.needsUpdate = true;
-        });
-
-        const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
-        const clamped = textureTargets.some((target) => target.replacementMap?.userData?.wasClampedToGpuLimit);
-        const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
-        setStatus(`${file.name} applied to exterior artwork only${qualityNote}${clamped ? ' · clamped only by GPU texture limit' : ''} · geometry untouched`);
-        requestRender();
+        applyTextureImage(uploadedImage, file.name, file.name);
       } catch (error) {
         console.error(error);
         setStatus(`Could not apply texture: ${file.name}`);
       }
-    }
-
-    function resetExteriorTexture() {
-      textureTargets.forEach((target) => {
-        if (target.replacementMap) {
-          target.replacementMap.dispose();
-          target.replacementMap = null;
-        }
-        target.material.map = target.originalMap;
-        stabilizeMaterialDepth(target.material);
-        target.material.needsUpdate = true;
-      });
-
-      if (textureInput) textureInput.value = '';
-      setStatus('Original texture restored');
-      requestRender();
     }
 
     function normalizeModel(object) {
@@ -932,10 +1047,17 @@
       const center = box.getCenter(new THREE.Vector3());
       object.position.sub(center);
 
+      // Then lift the object so the authored base sits directly on the floor plane.
       object.updateWorldMatrix(true, true);
       const centeredBox = new THREE.Box3().setFromObject(object);
-      modelSize = centeredBox.getSize(new THREE.Vector3());
+      object.position.y -= centeredBox.min.y;
+
+      object.updateWorldMatrix(true, true);
+      const groundedBox = new THREE.Box3().setFromObject(object);
+      modelSize = groundedBox.getSize(new THREE.Vector3());
       modelRadius = Math.max(0.1, modelSize.length() * 0.5);
+      orbitTarget = groundedBox.getCenter(new THREE.Vector3());
+      controls.target.copy(orbitTarget);
 
       controls.minDistance = Math.max(0.05, modelRadius * 0.42);
       controls.maxDistance = Math.max(8, modelRadius * 12);
@@ -944,24 +1066,46 @@
       camera.updateProjectionMatrix();
     }
 
+    function updateShadowFraming(box, bottom) {
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const padX = Math.max(0.35, size.x * 0.9);
+      const padZ = Math.max(0.35, size.z * 1.2);
+      const verticalSpan = Math.max(2.0, size.y * 4.0);
+
+      keyLight.target.position.set(center.x, bottom + size.y * 0.25, center.z);
+      keyLight.target.updateMatrixWorld();
+
+      keyLight.shadow.camera.left = -padX;
+      keyLight.shadow.camera.right = padX;
+      keyLight.shadow.camera.top = padZ;
+      keyLight.shadow.camera.bottom = -padZ;
+      keyLight.shadow.camera.near = 0.05;
+      keyLight.shadow.camera.far = verticalSpan + 8.0;
+      keyLight.shadow.camera.updateProjectionMatrix();
+      keyLight.shadow.needsUpdate = true;
+    }
+
     function updateStageHelpers() {
       const helperSize = Math.max(modelSize.x, modelSize.z, modelSize.y) * 1.8;
       const box = new THREE.Box3().setFromObject(presentationGroup);
       const bottom = box.min.y;
+      updateShadowFraming(box, bottom);
 
       scene.remove(grid);
       grid.geometry?.dispose?.();
       grid.material?.dispose?.();
       const gridColor = currentTheme === 'dark' ? 0xffffff : 0x6d583d;
       grid = new THREE.GridHelper(helperSize, isMobileLike ? 10 : 14, gridColor, gridColor);
-      grid.position.y = bottom - modelRadius * 0.012;
+      grid.position.y = bottom + 0.0005;
       grid.material.transparent = true;
       grid.material.opacity = currentTheme === 'dark' ? 0.09 : 0.075;
+      grid.visible = gridVisible;
       scene.add(grid);
 
       shadowPlane.geometry.dispose();
       shadowPlane.geometry = new THREE.CircleGeometry(helperSize * 0.52, 96);
-      shadowPlane.position.set(0, bottom - modelRadius * 0.014, 0);
+      shadowPlane.position.set(0, bottom + 0.0008, 0);
     }
 
     function getFitDistance(multiplier = 1.55) {
@@ -974,21 +1118,20 @@
     }
 
     function setView(view, smooth = true) {
-      const fit = getFitDistance(isMobileLike ? 1.72 : 1.62);
-      const heroDirection = new THREE.Vector3(1.12, 0.58, 1.32).normalize();
+      const fit = getFitDistance(isMobileLike ? 1.78 : 1.68);
+      const heroDirection = new THREE.Vector3(1.12, 0.42, 1.32).normalize();
       const positions = {
-        hero: heroDirection.multiplyScalar(fit * 1.12),
-        front: new THREE.Vector3(0, modelRadius * 0.1, fit * 1.05),
-        side: new THREE.Vector3(fit * 1.05, modelRadius * 0.1, 0.001),
-        top: new THREE.Vector3(0.001, fit * 1.12, 0.001),
+        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * 1.12)),
+        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * 1.08)),
+        side: orbitTarget.clone().add(new THREE.Vector3(fit * 1.08, 0, 0.001)),
       };
 
       const targetPosition = positions[view] || positions.hero;
-      controls.target.set(0, 0, 0);
+      controls.target.copy(orbitTarget);
 
       if (!smooth) {
         camera.position.copy(targetPosition);
-        camera.lookAt(0, 0, 0);
+        camera.lookAt(orbitTarget);
         controls.update();
         updateActiveView(view);
         requestRender();
@@ -996,7 +1139,7 @@
       }
 
       tweenCamera(camera.position.clone(), targetPosition, 420, () => {
-        controls.target.set(0, 0, 0);
+        controls.target.copy(orbitTarget);
         camera.lookAt(controls.target);
         controls.update();
       });
@@ -1038,12 +1181,12 @@
       document.documentElement.style.colorScheme = theme;
       themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
       themeToggle.setAttribute('title', theme === 'dark' ? 'Light mode' : 'Dark mode');
-      renderer.toneMappingExposure = theme === 'dark' ? 1.02 : 1.08;
-      hemiLight.intensity = theme === 'dark' ? 1.12 : 1.45;
-      keyLight.intensity = theme === 'dark' ? 2.2 : 2.65;
-      fillLight.intensity = theme === 'dark' ? 0.66 : 1.05;
-      rimLight.intensity = theme === 'dark' ? 1.0 : 0.76;
-      shadowPlane.material.opacity = theme === 'dark' ? 0.22 : 0.14;
+      renderer.toneMappingExposure = theme === 'dark' ? 0.90 : 0.94;
+      hemiLight.intensity = theme === 'dark' ? 0.96 : 1.08;
+      keyLight.intensity = theme === 'dark' ? 1.32 : 1.55;
+      fillLight.intensity = theme === 'dark' ? 0.44 : 0.62;
+      rimLight.intensity = theme === 'dark' ? 0.55 : 0.42;
+      shadowPlane.material.opacity = theme === 'dark' ? 0.14 : 0.10;
       if (model) updateStageHelpers();
       requestRender();
     }
@@ -1129,16 +1272,23 @@
       setStatus(autoRotateEnabled ? 'Auto-rotate on' : 'Auto-rotate off');
     });
 
+    gridToggleBtn.addEventListener('click', () => {
+      gridVisible = !gridVisible;
+      if (grid) grid.visible = gridVisible;
+      gridToggleBtn.classList.toggle('active', gridVisible);
+      requestRender();
+      setStatus(gridVisible ? 'Grid on' : 'Grid off');
+    });
+
     themeToggle.addEventListener('click', () => {
       applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
       setStatus(currentTheme === 'dark' ? 'Dark mode' : 'Light mode');
     });
 
-    textureInput.addEventListener('change', (event) => {
-      applyTextureFile(event.target.files?.[0]);
-    });
+    prevMockupBtn.addEventListener('click', () => applyMockupByIndex(currentMockupIndex - 1));
+    nextMockupBtn.addEventListener('click', () => applyMockupByIndex(currentMockupIndex + 1));
+    firstMockupBtn.addEventListener('click', () => applyMockupByIndex(0));
 
-    resetTextureBtn.addEventListener('click', resetExteriorTexture);
     shotBtn.addEventListener('click', takeScreenshot);
 
     let dragDepth = 0;
@@ -1147,7 +1297,6 @@
       event.preventDefault();
       if (isMobileLike) return;
       dragDepth += 1;
-      dropZone.classList.add('visible');
     });
 
     window.addEventListener('dragover', (event) => {
@@ -1165,7 +1314,7 @@
       event.preventDefault();
       dragDepth = 0;
       dropZone.classList.remove('visible');
-      applyTextureFile(event.dataTransfer.files?.[0]);
+      setStatus('Use Prev / Next to cycle through the mockup PNGs');
     });
   </script>
 </body>
