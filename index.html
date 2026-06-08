@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v27: adds a little breathing room to mobile portrait framing so the object is not obstructed by the bottom button dock on load. -->
+<!-- v28: moves the mobile portrait camera back by about 6% more so the object clears the bottom button dock on load. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -1325,7 +1325,7 @@
     function getViewFitMultiplier() {
       if (!isMobileLike) return 1.52;
       const { width, height } = getViewportSize();
-      return height >= width ? 1.12 : 1.48;
+      return height >= width ? 1.187 : 1.48;
     }
 
     function setView(view, smooth = true) {
