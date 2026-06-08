@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v26: tightens mobile portrait framing so the object fills more of the vertical display while preserving landscape framing. -->
+<!-- v27: adds a little breathing room to mobile portrait framing so the object is not obstructed by the bottom button dock on load. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -1325,7 +1325,7 @@
     function getViewFitMultiplier() {
       if (!isMobileLike) return 1.52;
       const { width, height } = getViewportSize();
-      return height >= width ? 1.04 : 1.48;
+      return height >= width ? 1.12 : 1.48;
     }
 
     function setView(view, smooth = true) {
@@ -1334,9 +1334,9 @@
       const isPortraitMobile = isMobileLike && height >= width;
       const heroDirection = new THREE.Vector3(1.12, isPortraitMobile ? 0.28 : 0.40, 1.32).normalize();
       const positions = {
-        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * (isPortraitMobile ? 0.92 : 1.06))),
-        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * (isPortraitMobile ? 0.92 : 1.04))),
-        side: orbitTarget.clone().add(new THREE.Vector3(fit * (isPortraitMobile ? 0.92 : 1.04), 0, 0.001)),
+        hero: orbitTarget.clone().add(heroDirection.multiplyScalar(fit * (isPortraitMobile ? 0.98 : 1.06))),
+        front: orbitTarget.clone().add(new THREE.Vector3(0, 0, fit * (isPortraitMobile ? 0.98 : 1.04))),
+        side: orbitTarget.clone().add(new THREE.Vector3(fit * (isPortraitMobile ? 0.98 : 1.04), 0, 0.001)),
       };
 
       const targetPosition = positions[view] || positions.hero;
