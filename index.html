@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v39: simplifies the mobile dock into compact touch buttons where the active highlight includes both icon and label. -->
+<!-- v45: loads the lighter JPG mockup files from the 3d folder instead of JPG files for faster cycling and better responsiveness. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -22,6 +22,8 @@
       --drop-bg: rgba(255, 252, 246, 0.84);
       --drop-border: rgba(157, 107, 39, 0.54);
       --radius: 999px;
+      --dock-radius: 18px;
+      --button-radius: 14px;
       --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --app-height: 100dvh;
       --safe-top: env(safe-area-inset-top, 0px);
@@ -122,6 +124,36 @@
 
     .title,
     .status,
+
+    .mockup-name {
+      position: fixed;
+      top: calc(12px + var(--safe-top));
+      left: 50%;
+      z-index: 4;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      max-width: min(88vw, 420px);
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--dock-radius);
+      background: var(--glass);
+      box-shadow: 0 12px 34px var(--shadow);
+      backdrop-filter: blur(18px) saturate(1.15);
+      -webkit-backdrop-filter: blur(18px) saturate(1.15);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+
     .controls {
       pointer-events: auto;
       border: 1px solid var(--line);
@@ -186,7 +218,7 @@
       width: max-content;
       max-width: calc(100vw - 28px - var(--safe-left) - var(--safe-right));
       padding: 8px 10px 10px;
-      border-radius: 28px;
+      border-radius: var(--dock-radius);
       transform: translateX(-50%);
     }
 
@@ -225,7 +257,7 @@
       justify-content: center;
       gap: 4px;
       border: 1px solid transparent;
-      border-radius: 17px;
+      border-radius: var(--button-radius);
       background: transparent;
       color: var(--muted);
       font: inherit;
@@ -432,7 +464,7 @@
         min-width: 46px;
         padding: 5px 3px 4px;
         gap: 3px;
-        border-radius: 16px;
+        border-radius: var(--button-radius);
       }
 
       .icon {
@@ -529,6 +561,8 @@
 <body>
   <div id="stage" aria-label="3D wine case wrap preview"></div>
 
+  <div class="mockup-name" id="mockupNameLabel" aria-live="polite">Option A - Mockup 1</div>
+
   <div class="topbar" aria-live="polite">
     <div class="status" id="statusText">Loading model</div>
   </div>
@@ -560,7 +594,6 @@
     <div class="control-item"><button type="button" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme"><svg class="icon icon-moon"><use href="#i-moon"></use></svg><svg class="icon icon-sun"><use href="#i-sun"></use></svg><span class="button-label">Dark</span><span class="sr-only">Toggle theme</span></button></div>
     <div class="control-item"><button type="button" id="shotBtn" aria-label="Save screenshot" title="Save screenshot"><svg class="icon"><use href="#i-camera"></use></svg><span class="button-label">Save</span><span class="sr-only">Save screenshot</span></button></div>
   </div>
-  </div>
 
   <div id="loader">
     <div class="loader-card">
@@ -572,7 +605,7 @@
   <div id="dropZone">
     <div class="drop-card">
       <strong>Mockup cycle</strong>
-      <span>Use Prev / Next to cycle through the PNG mockups in the 3d folder.</span>
+      <span>Use Prev / Next to cycle through the JPG mockups in the 3d folder.</span>
     </div>
   </div>
 
@@ -594,16 +627,17 @@
     const MODEL_PATH = './3d/Case_Wrap_01.glb';
 
     const MOCKUPS = [
-      { label: 'A 01', path: './3d/The_Set_Case_Wrap_A_01.png' },
-      { label: 'A 02', path: './3d/The_Set_Case_Wrap_A_02.png' },
-      { label: 'A 03', path: './3d/The_Set_Case_Wrap_A_03.png' },
-      { label: 'B 01', path: './3d/The_Set_Case_Wrap_B_01.png' },
-      { label: 'B 02', path: './3d/The_Set_Case_Wrap_B_02.png' },
-      { label: 'B 03', path: './3d/The_Set_Case_Wrap_B_03.png' }
+      { label: 'A 01', displayName: 'Option A - Mockup 1', path: './3d/The_Set_Case_Wrap_A_01.jpg' },
+      { label: 'A 02', displayName: 'Option A - Mockup 2', path: './3d/The_Set_Case_Wrap_A_02.jpg' },
+      { label: 'A 03', displayName: 'Option A - Mockup 3', path: './3d/The_Set_Case_Wrap_A_03.jpg' },
+      { label: 'B 01', displayName: 'Option B - Mockup 1', path: './3d/The_Set_Case_Wrap_B_01.jpg' },
+      { label: 'B 02', displayName: 'Option B - Mockup 2', path: './3d/The_Set_Case_Wrap_B_02.jpg' },
+      { label: 'B 03', displayName: 'Option B - Mockup 3', path: './3d/The_Set_Case_Wrap_B_03.jpg' }
     ];
 
     const stage = document.getElementById('stage');
     const loaderEl = document.getElementById('loader');
+    const mockupNameLabel = document.getElementById('mockupNameLabel');
     const loaderText = document.getElementById('loaderText');
     const progressBar = document.getElementById('progressBar');
     const statusText = document.getElementById('statusText');
@@ -675,8 +709,8 @@
       powerPreference: 'high-performance'
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.94;
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = 1.01;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     stage.appendChild(renderer.domElement);
@@ -710,10 +744,10 @@
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xefe3d0, 1.08);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xefe3d0, 1.03);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.34);
     keyLight.position.set(3.5, 4.5, 4.0);
     scene.add(keyLight.target);
     keyLight.castShadow = true;
@@ -728,11 +762,11 @@
     keyLight.shadow.normalBias = 0.018;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xfff1d4, 0.62);
+    const fillLight = new THREE.DirectionalLight(0xfff1d4, 0.46);
     fillLight.position.set(-4, 2, -3);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xd9e2ff, 0.42);
+    const rimLight = new THREE.DirectionalLight(0xd9e2ff, 0.29);
     rimLight.position.set(-2, 4, 5);
     scene.add(rimLight);
 
@@ -864,7 +898,7 @@
             const materials = Array.isArray(child.material) ? child.material : [child.material];
             materials.forEach((mat) => {
               if (!mat) return;
-              mat.envMapIntensity = 0.42;
+              mat.envMapIntensity = 0.29;
               if (typeof mat.roughness === 'number') mat.roughness = Math.max(mat.roughness, 0.72);
               if (typeof mat.metalness === 'number') mat.metalness = Math.min(mat.metalness, 0.0);
               stabilizeMaterialDepth(mat);
@@ -1085,9 +1119,19 @@
       });
     }
 
+
+    function updateMockupName(index) {
+      const wrappedIndex = (index + MOCKUPS.length) % MOCKUPS.length;
+      const mockup = MOCKUPS[wrappedIndex];
+      if (mockupNameLabel) {
+        mockupNameLabel.textContent = mockup.displayName || mockup.label;
+      }
+    }
+
     function applyMockupTextures(index, maps, statusLabel = 'Mockup', showStatus = true) {
       currentMockupIndex = (index + MOCKUPS.length) % MOCKUPS.length;
       currentMockupImage = mockupImageCache.get(MOCKUPS[currentMockupIndex].path) || currentMockupImage;
+      updateMockupName(currentMockupIndex);
 
       textureTargets.forEach((target, targetIndex) => {
         target.material.map = maps[targetIndex];
@@ -1261,7 +1305,7 @@
         applyMockupTextures(wrappedIndex, maps, `Mockup ${mockup.label}`, announce);
       } catch (error) {
         console.error(error);
-        setStatus(`Could not load ${mockup.path}. Make sure the PNG is inside the 3d folder.`);
+        setStatus(`Could not load ${mockup.path}. Make sure the JPG is inside the 3d folder.`);
       }
     }
 
@@ -1285,7 +1329,7 @@
         });
       } catch (error) {
         console.error(error);
-        setStatus(`Could not load ${mockup.path}. Make sure the PNG is inside the 3d folder.`);
+        setStatus(`Could not load ${mockup.path}. Make sure the JPG is inside the 3d folder.`);
       }
     }
 
@@ -1301,6 +1345,7 @@
         target.material.needsUpdate = true;
       });
 
+      if (mockupNameLabel && sourceName) mockupNameLabel.textContent = sourceName;
       const size = textureTargets[0]?.replacementMap?.userData?.textureSize;
       const clamped = textureTargets.some((target) => target.replacementMap?.userData?.wasClampedToGpuLimit);
       const qualityNote = size ? ` · ${size.width}×${size.height}px atlas` : '';
@@ -1552,11 +1597,11 @@
       document.documentElement.style.colorScheme = theme;
       themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
       themeToggle.setAttribute('title', theme === 'dark' ? 'Light mode' : 'Dark mode');
-      renderer.toneMappingExposure = theme === 'dark' ? 0.90 : 0.94;
-      hemiLight.intensity = theme === 'dark' ? 0.96 : 1.08;
-      keyLight.intensity = theme === 'dark' ? 1.32 : 1.55;
-      fillLight.intensity = theme === 'dark' ? 0.44 : 0.62;
-      rimLight.intensity = theme === 'dark' ? 0.55 : 0.42;
+      renderer.toneMappingExposure = theme === 'dark' ? 0.96 : 1.01;
+      hemiLight.intensity = theme === 'dark' ? 0.96 : 1.03;
+      keyLight.intensity = theme === 'dark' ? 1.22 : 1.34;
+      fillLight.intensity = theme === 'dark' ? 0.38 : 0.46;
+      rimLight.intensity = theme === 'dark' ? 0.36 : 0.29;
       shadowPlane.material.opacity = theme === 'dark' ? 0.14 : 0.10;
       if (model) updateStageHelpers();
       requestRender();
@@ -1703,7 +1748,7 @@
       event.preventDefault();
       dragDepth = 0;
       dropZone.classList.remove('visible');
-      setStatus('Use Prev / Next to cycle through the mockup PNGs');
+      setStatus('Use Prev / Next to cycle through the mockup JPGs');
     });
   </script>
 </body>
