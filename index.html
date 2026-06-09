@@ -578,7 +578,7 @@
     <div class="control-item"><button type="button" id="prevMockupBtn" aria-label="Previous mockup" title="Previous mockup"><svg class="icon"><use href="#i-prev"></use></svg><span class="button-label">Prev</span><span class="sr-only">Previous mockup</span></button></div>
     <div class="control-item"><button type="button" id="nextMockupBtn" aria-label="Next mockup" title="Next mockup"><svg class="icon"><use href="#i-next"></use></svg><span class="button-label">Next</span><span class="sr-only">Next mockup</span></button></div>
     <div class="control-item"><button type="button" id="rotateBtn" aria-label="Toggle auto-rotate" title="Toggle auto-rotate"><svg class="icon"><use href="#i-rotate-plane"></use></svg><span class="button-label">Rotate</span><span class="sr-only">Toggle auto-rotate</span></button></div>
-    <div class="control-item"><button type="button" id="gridToggleBtn" class="active" aria-label="Toggle grid" title="Toggle grid"><svg class="icon"><use href="#i-grid"></use></svg><span class="button-label">Grid</span><span class="sr-only">Toggle grid</span></button></div>
+    <div class="control-item"><button type="button" id="gridToggleBtn" aria-label="Toggle grid" title="Toggle grid"><svg class="icon"><use href="#i-grid"></use></svg><span class="button-label">Grid</span><span class="sr-only">Toggle grid</span></button></div>
     <div class="control-item"><button type="button" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme"><svg class="icon icon-moon"><use href="#i-moon"></use></svg><svg class="icon icon-sun"><use href="#i-sun"></use></svg><span class="button-label">Dark</span><span class="sr-only">Toggle theme</span></button></div>
     <div class="control-item"><button type="button" id="shotBtn" aria-label="Save screenshot" title="Save screenshot"><svg class="icon"><use href="#i-camera"></use></svg><span class="button-label">Save</span><span class="sr-only">Save screenshot</span></button></div>
   </div>
@@ -766,7 +766,7 @@
     shadowPlane.receiveShadow = true;
     scene.add(shadowPlane);
 
-    let gridVisible = true;
+    let gridVisible = false;
     let grid = new THREE.GridHelper(2, isMobileLike ? 10 : 16, 0x6d583d, 0x6d583d);
     grid.material.transparent = true;
     grid.material.opacity = 0.09;
