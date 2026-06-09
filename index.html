@@ -110,16 +110,12 @@
       transform: translateZ(0);
     }
 
-    .topbar {
-      /* Hidden visual status layer. Status text is kept only for internal updates/accessibility,
-         so the desktop UI stays clean with no top-left title or texture filename labels. */
-      position: fixed;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      pointer-events: none;
+    .topbar,
+    .status {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
     }
 
     .title,
@@ -418,14 +414,6 @@
     .error { color: #b3261e; }
 
     @media (max-width: 760px), (pointer: coarse) {
-      .topbar {
-        top: calc(10px + var(--safe-top));
-        left: calc(10px + var(--safe-left));
-        right: calc(10px + var(--safe-right));
-        align-items: flex-start;
-      }
-
-
       .controls {
         left: 50%;
         right: auto;
@@ -1518,7 +1506,7 @@
     function getViewFitMultiplier() {
       if (!isMobileLike) return 1.52;
       const { width, height } = getViewportSize();
-      return height >= width ? 1.187 : 1.48;
+      return height >= width ? 1.365 : 1.48;
     }
 
     function setView(view, smooth = true) {
